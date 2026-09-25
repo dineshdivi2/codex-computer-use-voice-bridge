@@ -79,4 +79,8 @@ The repository deliberately has no runtime npm dependencies. The MCP server uses
 
 ## Protocol artifacts
 
-The checked-in [schema note](schemas/README.md) identifies the exact Codex build and binary hash used to generate `schemas/typescript` and `schemas/json`. Regenerate both directories after any Codex upgrade before changing code.
+The checked-in [schema note](schemas/README.md) identifies the exact Codex build and binary hash. The generated TypeScript protocol types are included; the larger generated JSON schema snapshot is omitted and can be recreated with `npm run schema:generate`. Regenerate both after any Codex upgrade before changing code.
+
+## What is and is not bundled
+
+The repository includes the host, job-form plugin, Dictation scripts, tests, generated TypeScript protocol types, and sanitized verification traces. The default Codex Dictation path uses these checked-in sources plus an installed Codex app and Node.js 24 or newer. The optional `--voice-mode local` path still depends on the separate `ask-native-voice.ps1` launcher and local faster-whisper service. Installed Codex binaries, private Dictation history, and generated JSON schema snapshots are not bundled.
