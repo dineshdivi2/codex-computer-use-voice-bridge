@@ -1,6 +1,6 @@
 # Codex Computer-Use Voice Bridge
 
-See [concept and verified status](PUBLIC_STATUS.md). Generated Codex protocol schemas are not committed; run `npm run schema:generate` against your installed Codex build before tests or execution.
+See [concept and verified status](PUBLIC_STATUS.md). The generated TypeScript protocol snapshot is included. Regenerate both TypeScript and JSON schemas with `npm run schema:generate` after a Codex upgrade.
 
 ## Codex Human Intervention Harness
 

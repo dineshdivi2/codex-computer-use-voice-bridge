@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "job-form-voice-bridge": {
+      "cwd": ".",
+      "command": "node",
+      "args": [
+        "./mcp/server.mjs"
+      ]
+    }
+  }
+}

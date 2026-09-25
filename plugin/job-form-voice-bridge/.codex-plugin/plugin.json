@@ -1,0 +1,30 @@
+{
+  "name": "job-form-voice-bridge",
+  "version": "0.1.0+codex.20260811170143",
+  "description": "Resolve unknown job-application form fields through local Codex Dictation and resume the task with the transcript.",
+  "author": {
+    "name": "Dines"
+  },
+  "keywords": [
+    "job-applications",
+    "dictation",
+    "human-in-the-loop",
+    "voice"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Job Form Voice Bridge",
+    "shortDescription": "Voice answers for unknown job-form fields",
+    "longDescription": "When a job-application field cannot be answered safely from known context, Codex can ask one concise question through local Dictation, collect the transcript, validate it against the field, and continue without using the active chat composer.",
+    "developerName": "Dines",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive"
+    ],
+    "defaultPrompt": [
+      "Use voice if this job form needs an unknown answer.",
+      "Ask me by voice for the missing application value."
+    ]
+  },
+  "mcpServers": "./.mcp.json"
+}
