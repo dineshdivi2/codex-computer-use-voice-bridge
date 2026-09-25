@@ -1,37 +1,82 @@
 # Codex Computer-Use Voice Bridge
 
-**A scoped local voice handoff for a computer-use workflow blocked by one missing, non-sensitive input.**
+See [concept and verified status](PUBLIC_STATUS.md). Generated Codex protocol schemas are not committed; run `npm run schema:generate` against your installed Codex build before tests or execution.
 
-A computer-use agent sometimes reaches a legitimate ambiguity: a required form field, a workflow choice, or a missing fact cannot be inferred safely. The bridge provides a narrow alternative to guessing or abandoning the task.
+## Codex Human Intervention Harness
 
-```text
-agent reaches a typed blocker
-        ↓
-one concise spoken question
-        ↓
-user answers through the local microphone
-        ↓
-local speech-to-text
-        ↓
-validated transcript returns to the same task
+A Codex-first TypeScript host for supervising `codex app-server` turns and safely resolving human-input blockers through Codex Dictation, with terminal and legacy local-Whisper fallbacks.
+
+The repository contains an implemented MVP, generated types from the installed Codex build, deterministic protocol tests, a small MCP server for Default-mode computer-use blockers, and live verification evidence.
+
+## What works
+
+- Starts `codex app-server` over stdio JSONL and performs `initialize` / `initialized`.
+- Starts or resumes threads and starts, steers, or interrupts turns.
+- Handles the installed build's five relevant server-request families:
+  - `item/tool/requestUserInput`
+  - `item/commandExecution/requestApproval`
+  - `item/fileChange/requestApproval`
+  - `item/permissions/requestApproval`
+  - `mcpServer/elicitation/request`
+- Correlates every answer to the original JSON-RPC request, thread, turn, and item.
+- Speaks the actual blocker question, starts Codex Dictation in a controlled response window, and lets the user stop with `Alt+N`.
+- Correlates the first new completed global Dictation history record created after the prompt; a controlled paste sink is a secondary recovery path.
+- Uses a terminal prompt on timeout or ambiguity and retains the existing `127.0.0.1:8766` local-Whisper bridge as an opt-in mode.
+- Exposes `request_human_intervention` as a local MCP tool so Codex can create a standard elicitation in Default mode.
+- Redacts spoken prompts, rejects vague approvals, grants only requested permissions, and logs no raw audio or transcript.
+
+See [the high-level design](docs/HIGH_LEVEL_DESIGN.md), [implementation plan](docs/IMPLEMENTATION_PLAN.md), and [live verification report](docs/LIVE_VERIFICATION.md).
+
+## Run
+
+Prerequisites:
+
+- Node.js 24 or newer.
+- A working Codex login and an installed `codex` command or explicit Codex binary.
+- The Codex desktop app running with global Dictation available. This machine's configured start/stop shortcut is `Alt+N`.
+- The legacy local mode additionally needs `C:\path\to\jobs-workspace\voice_bridge\ask-native-voice.ps1`.
+
+```powershell
+node --experimental-strip-types src/cli.ts `
+  --prompt "Complete the job application. Use request_human_intervention for an unknown required field. Fill resolved fields, but do not submit." `
+  --cwd "C:\path\to\trusted\workspace"
 ```
 
-## Design boundary
+When the workflow reaches an unknown field, the harness opens a small top-most response window, speaks the contextual question, and starts Codex Dictation. Speak the answer and press `Alt+N` once. No Enter key is required. The answer is returned to the original App Server request, and the same turn continues.
 
-This is not general voice control, autonomous browser control, or a replacement for user approval.
+Useful options:
 
-It is for one bounded interaction:
+- `--resume <thread-id>` resumes a Codex thread.
+- `--model <id>` chooses an exact model.
+- `--no-voice` makes the terminal the only intervention channel.
+- `--voice-mode dictation|local` selects Codex Dictation (default) or the legacy local faster-whisper bridge.
+- `--dictation-hotkey <SendKeys>` overrides `%n`, the `Alt+N` SendKeys expression.
+- `--dictation-timeout-seconds <n>` controls the manual response timeout; the default is 120 seconds.
+- `--dictation-auto-stop-seconds <n>` restores timed stopping when non-zero; manual stop is the default.
+- `--dictation-script <path>` and `--voice-script <path>` override the Dictation and legacy launchers.
+- `--no-mcp` disables injection of the blocker MCP server.
+- `--codex-bin`, `--mcp-node`, and `--mcp-server` override runtime paths.
+- `--audit <path>` selects the sanitized JSONL audit file.
 
-- one missing, non-sensitive value
-- one scoped question
-- a local transcription path
-- a visible transcript returned to the active task
-- normal policy and submission approval still apply
+Run a standalone microphone/history smoke test with:
 
-## Why it matters
+```powershell
+npm run dictation:smoke
+```
 
-Human intervention is often treated as an unstructured chat interruption. This prototype treats it as a typed, resumable runtime event: the agent declares what it is blocked on, requests only the required information, and continues with the response attached to the workflow state.
+Codex itself persists Dictation transcripts under `%USERPROFILE%\.codex\dictation-history` and the legacy `transcription-history.jsonl`. The harness reads only records created after its own prompt and does not copy transcript text into its audit log.
 
-## Status
+If a Microsoft Store ACL prevents a child process from executing `codex.exe` in place, copy `codex.exe`, `codex-code-mode-host.exe`, and `codex-command-runner.exe` from the same installed package into one ignored runtime directory. Keeping the siblings together is required for MCP tool execution. Do not commit these binaries.
 
-Early local prototype. The public direction is to package a minimal reproducible demo with explicit privacy, consent, failure, and fallback behavior.
+## Verify
+
+```powershell
+npm test
+npx tsc --noEmit
+```
+
+The repository deliberately has no runtime npm dependencies. The MCP server uses the standard MCP JSON-RPC/JSONL protocol directly, and all Codex payload types come from `codex app-server generate-ts`.
+
+## Protocol artifacts
+
+The checked-in [schema note](schemas/README.md) identifies the exact Codex build and binary hash used to generate `schemas/typescript` and `schemas/json`. Regenerate both directories after any Codex upgrade before changing code.

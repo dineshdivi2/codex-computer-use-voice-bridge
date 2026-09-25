@@ -1,0 +1,3 @@
+{"method":"item/tool/requestUserInput","id":301,"params":{"threadId":"thread-fixture","turnId":"turn-fixture","itemId":"item-fixture","questions":[{"id":"next_action","header":"Next action","question":"How should Codex continue?","isOther":false,"isSecret":false,"options":[{"label":"Continue","description":"Continue the current task"},{"label":"Stop","description":"Stop the current task"}]}],"autoResolutionMs":null}}
+{"id":301,"result":{"answers":{"next_action":{"answers":["Continue"]}}}}
+{"method":"serverRequest/resolved","params":{"threadId":"thread-fixture","requestId":301}}

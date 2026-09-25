@@ -1,0 +1,15 @@
+{
+  "name": "codex-human-intervention-harness",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "start": "node --experimental-strip-types src/cli.ts",
+    "test": "node --experimental-strip-types --test tests/*.test.ts",
+    "dictation:smoke": "powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File ./scripts/capture-codex-dictation.ps1 -Prompt \"Dictation smoke test. Say a short answer, then press Alt+N.\" -TimeoutSeconds 120",
+    "schema:generate": "codex app-server generate-ts --out ./schemas/typescript && codex app-server generate-json-schema --out ./schemas/json"
+  }
+}

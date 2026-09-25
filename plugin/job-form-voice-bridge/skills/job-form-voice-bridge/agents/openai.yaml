@@ -1,0 +1,11 @@
+interface:
+  display_name: "Job Form Voice Bridge"
+  short_description: "Ask by voice when a job form needs an answer"
+  default_prompt: "Use $job-form-voice-bridge when a job application field cannot be completed safely from known context."
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "job-form-voice-bridge"
+      description: "Local MCP server that launches Codex Dictation and returns the transcript"
+policy:
+  allow_implicit_invocation: true
