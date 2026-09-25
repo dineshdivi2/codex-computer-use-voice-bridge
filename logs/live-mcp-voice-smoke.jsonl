@@ -1,0 +1,2 @@
+{"timestamp":"2026-08-11T10:42:44.075Z","event":"registered","requestId":0,"threadId":"019ff06a-9fca-7662-8921-1f319558e79b","turnId":"019ff06a-a4f0-7fd3-99e7-bc51557db1a8","itemId":null,"method":"mcpServer/elicitation/request","state":"REGISTERED"}
+{"timestamp":"2026-08-11T10:43:08.839Z","event":"voice-fallback","requestId":0,"threadId":"019ff06a-9fca-7662-8921-1f319558e79b","turnId":"019ff06a-a4f0-7fd3-99e7-bc51557db1a8","itemId":null,"method":"mcpServer/elicitation/request","state":"FALLBACK_REQUIRED","channel":"voice","detail":"Voice channel returned no usable answer"}
