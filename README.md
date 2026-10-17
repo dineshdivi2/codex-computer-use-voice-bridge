@@ -8,6 +8,19 @@ A Codex-first TypeScript host for supervising `codex app-server` turns and safel
 
 The repository contains an implemented MVP, generated types from the installed Codex build, deterministic protocol tests, a small MCP server for Default-mode computer-use blockers, and live verification evidence.
 
+## Start here
+
+This upgrade keeps **Codex Dictation** and adds a shared response window, explicit answer review, typed input, cancellation, cross-process capture coordination, and setup diagnostics. See the [upgrade design and acceptance checks](docs/DICTATION_UPGRADE.md).
+
+Requires Windows, Node.js >=24, an installed Codex desktop app with global Dictation enabled, and the same configured shortcut in the bridge and app. Install development tools and inspect setup:
+
+```powershell
+pnpm install --frozen-lockfile --ignore-scripts
+pnpm doctor
+```
+
+The doctor checks the selected runtime and configuration without recording or reading transcript contents. Warnings are unresolved checks, not readiness confirmation. If the protocol snapshot and selected CLI differ, verify/regenerate against the selected binary before relying on the standalone host. The CLI and running desktop app may be different builds.
+
 ## What works
 
 - Starts `codex app-server` over stdio JSONL and performs `initialize` / `initialized`.
@@ -19,8 +32,8 @@ The repository contains an implemented MVP, generated types from the installed C
   - `item/permissions/requestApproval`
   - `mcpServer/elicitation/request`
 - Correlates every answer to the original JSON-RPC request, thread, turn, and item.
-- Speaks the actual blocker question, starts Codex Dictation in a controlled response window, and lets the user stop with `Alt+N`.
-- Correlates the first new completed global Dictation history record created after the prompt; a controlled paste sink is a secondary recovery path.
+- Speaks the blocker question in a controlled response window. The user explicitly starts Dictation, stops with the configured shortcut (default Alt+N), and confirms it is off before sending or closing.
+- Excludes pre-existing and incomplete history, presents a candidate for review, and returns it only after the user chooses Send answer. Multiple candidates require typed resolution.
 - Uses a terminal prompt on timeout or ambiguity and retains the existing `127.0.0.1:8766` local-Whisper bridge as an opt-in mode.
 - Exposes `request_human_intervention` as a local MCP tool so Codex can create a standard elicitation in Default mode.
 - Redacts spoken prompts, rejects vague approvals, grants only requested permissions, and logs no raw audio or transcript.
@@ -42,7 +55,7 @@ node --experimental-strip-types src/cli.ts `
   --cwd "C:\path\to\trusted\workspace"
 ```
 
-When the workflow reaches an unknown field, the harness opens a small top-most response window, speaks the contextual question, and starts Codex Dictation. Speak the answer and press `Alt+N` once. No Enter key is required. The answer is returned to the original App Server request, and the same turn continues.
+When the workflow reaches an unknown field, the harness opens a small top-most response window, speaks the contextual question, and waits for you to choose Start Dictation. Choose **Start Dictation**, speak the answer, and stop Dictation with its configured shortcut (default `Alt+N`). Tick **I have stopped Dictation**, review/edit the answer, then choose **Send answer**. You can select a visible choice, type instead, retry, or cancel. The host returns the confirmed answer to the original request; verify the subsequent task step independently.
 
 Useful options:
 
@@ -71,11 +84,19 @@ If a Microsoft Store ACL prevents a child process from executing `codex.exe` in 
 ## Verify
 
 ```powershell
-npm test
-npx tsc --noEmit
+pnpm run verify
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/check-powershell.ps1
 ```
 
 The repository deliberately has no runtime npm dependencies. The MCP server uses the standard MCP JSON-RPC/JSONL protocol directly, and all Codex payload types come from `codex app-server generate-ts`.
+
+Preview the response window without microphone, speech, or history access:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/capture-codex-dictation.ps1 -PreviewImage outputs/response-window.png
+```
+
+The standalone host and packaged plugin use one maintained capture implementation. Installing/updating the plugin in Codex is a separate action; editing a checkout does not update an already installed plugin.
 
 ## Protocol artifacts
 

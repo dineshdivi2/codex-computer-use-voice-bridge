@@ -1,6 +1,8 @@
 # Codex Computer-Use Voice Bridge: concept and verified status
 
-Last reviewed: 2026-09-25.
+Last reviewed: 2026-10-16.
+
+A Dictation-preserving upgrade is implemented in this checkout: shared capture/UI, explicit review/send, cancellation, typed fallback, diagnostics, and additional regression tests. See [the upgrade design](docs/DICTATION_UPGRADE.md). Current-build live microphone capture and a newly installed plugin are not yet verified; the historical live evidence below remains dated.
 
 ## Concept
 
