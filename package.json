@@ -1,6 +1,6 @@
 {
   "name": "codex-human-intervention-harness",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -8,8 +8,19 @@
   },
   "scripts": {
     "start": "node --experimental-strip-types src/cli.ts",
-    "test": "node --experimental-strip-types --test tests/*.test.ts",
+    "test": "node --experimental-strip-types --test tests/*.test.ts tests/*.test.mjs",
     "dictation:smoke": "powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File ./scripts/capture-codex-dictation.ps1 -Prompt \"Dictation smoke test. Say a short answer, then press Alt+N.\" -TimeoutSeconds 120",
-    "schema:generate": "codex app-server generate-ts --out ./schemas/typescript && codex app-server generate-json-schema --out ./schemas/json"
-  }
+    "schema:generate": "codex app-server generate-ts --out ./schemas/typescript && codex app-server generate-json-schema --out ./schemas/json",
+    "doctor": "node --experimental-strip-types src/cli.ts doctor",
+    "typecheck": "tsc --noEmit && tsc --project tsconfig.plugin.json --noEmit",
+    "format": "prettier --write src tests plugin/job-form-voice-bridge/mcp package.json tsconfig*.json",
+    "format:check": "prettier --check src tests plugin/job-form-voice-bridge/mcp package.json tsconfig*.json",
+    "verify": "pnpm run typecheck && pnpm run format:check && pnpm test"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "prettier": "3.9.10",
+    "typescript": "^7.0.2"
+  },
+  "packageManager": "pnpm@11.25.0"
 }
