@@ -1,4 +1,6 @@
 import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { inspectSetup } from "./doctor.ts";
 import { AppServerClient } from "./app-server-client.ts";
 import { SanitizedAuditLog } from "./audit-log.ts";
 import {
@@ -31,6 +33,8 @@ interface CliOptions {
 
 function valueAfter(args: string[], flag: string): string | undefined {
   const index = args.indexOf(flag);
+  if (index >= 0 && (!args[index + 1] || args[index + 1].startsWith("--")))
+    throw new Error(`${flag} requires a value`);
   return index >= 0 ? args[index + 1] : undefined;
 }
 
@@ -43,16 +47,42 @@ function numericOption(
   const raw = valueAfter(args, flag);
   if (raw === undefined) return fallback;
   const value = Number(raw);
-  if (!Number.isFinite(value) || value < minimum) {
-    throw new Error(`${flag} must be a number greater than or equal to ${minimum}`);
+  if (!Number.isInteger(value) || value < minimum) {
+    throw new Error(
+      `${flag} must be an integer greater than or equal to ${minimum}`,
+    );
   }
   return value;
 }
 
-function parseArgs(args: string[]): CliOptions {
+export function parseArgs(args: string[]): CliOptions {
+  const flags = new Set([
+    "--prompt",
+    "--cwd",
+    "--model",
+    "--resume",
+    "--no-voice",
+    "--voice-mode",
+    "--codex-bin",
+    "--voice-script",
+    "--dictation-script",
+    "--dictation-hotkey",
+    "--dictation-timeout-seconds",
+    "--dictation-auto-stop-seconds",
+    "--audit",
+    "--no-mcp",
+    "--mcp-node",
+    "--mcp-server",
+    "--help",
+    "-h",
+  ]);
+  for (const arg of args)
+    if (arg.startsWith("--") && !flags.has(arg))
+      throw new Error(`Unknown option: ${arg}`);
   if (args.includes("--help") || args.includes("-h")) {
     console.log(`Usage:
   node --experimental-strip-types src/cli.ts --prompt "Task" [options]
+  node --experimental-strip-types src/cli.ts doctor [--json] [--codex-bin <path>]
 
 Options:
   --cwd <path>          Codex working directory (default: current directory)
@@ -80,6 +110,22 @@ Options:
   if (voiceMode !== "dictation" && voiceMode !== "local") {
     throw new Error("--voice-mode must be dictation or local");
   }
+  const timeoutSeconds = numericOption(
+    args,
+    "--dictation-timeout-seconds",
+    120,
+    15,
+  );
+  const autoStopSeconds = numericOption(
+    args,
+    "--dictation-auto-stop-seconds",
+    0,
+    0,
+  );
+  if (timeoutSeconds > 300 || autoStopSeconds > 30)
+    throw new Error(
+      "Dictation timeout must be <=300 seconds and auto-stop <=30 seconds",
+    );
   return {
     prompt,
     cwd,
@@ -91,15 +137,11 @@ Options:
     voiceScript: valueAfter(args, "--voice-script"),
     dictationScript: valueAfter(args, "--dictation-script"),
     dictationHotkey: valueAfter(args, "--dictation-hotkey") ?? "%n",
-    dictationTimeoutMs:
-      numericOption(args, "--dictation-timeout-seconds", 120, 15) * 1_000,
-    dictationAutoStopSeconds: numericOption(
-      args,
-      "--dictation-auto-stop-seconds",
-      0,
-      0,
+    dictationTimeoutMs: timeoutSeconds * 1_000,
+    dictationAutoStopSeconds: autoStopSeconds,
+    auditPath: resolve(
+      valueAfter(args, "--audit") ?? "logs/interventions.jsonl",
     ),
-    auditPath: resolve(valueAfter(args, "--audit") ?? "logs/interventions.jsonl"),
     noMcp: args.includes("--no-mcp"),
     mcpNode: valueAfter(args, "--mcp-node"),
     mcpServer: valueAfter(args, "--mcp-server"),
@@ -107,6 +149,22 @@ Options:
 }
 
 async function main(): Promise<void> {
+  if (process.argv[2] === "doctor") {
+    const args = process.argv.slice(3);
+    const report = await inspectSetup({
+      codexBinary: valueAfter(args, "--codex-bin"),
+      hotkey: valueAfter(args, "--dictation-hotkey"),
+      launcherScript: valueAfter(args, "--dictation-script"),
+    });
+    if (args.includes("--json")) console.log(JSON.stringify(report, null, 2));
+    else
+      for (const check of report.checks)
+        console.log(
+          `[${check.status.toUpperCase()}] ${check.name}: ${check.message}`,
+        );
+    process.exitCode = report.ok ? 0 : 1;
+    return;
+  }
   const options = parseArgs(process.argv.slice(2));
   const client = AppServerClient.spawn({
     codexBinary: options.codexBinary,
@@ -128,28 +186,45 @@ async function main(): Promise<void> {
     voice,
     fallback: terminal,
     audit: new SanitizedAuditLog(options.auditPath),
+    channelTimeoutMs: options.dictationTimeoutMs,
+    responseTimeoutMs: options.dictationTimeoutMs + 60_000,
+    onProgress: (event) => {
+      const message = {
+        waiting: "Waiting for your answer",
+        "answer-sent": "Answer sent; waiting for Codex",
+        cleared: "Request cleared by Codex",
+        failed: "Question could not be completed",
+      }[event];
+      process.stderr.write(`\n[${message}]\n`);
+    },
   });
   coordinator.attach(client);
   const manager = new ThreadAndTurnManager(client);
 
   client.on("stderr", (text) => process.stderr.write(text));
-  client.on("interventionError", (error) => console.error("Intervention error:", error));
-  client.on("protocolError", (error) => console.error("Protocol error:", error));
+  client.on("interventionError", (error) =>
+    console.error("Intervention error:", error),
+  );
+  client.on("protocolError", (error) =>
+    console.error("Protocol error:", error),
+  );
   client.on("notification", (notification) => {
     if (notification.method === "item/agentMessage/delta") {
       process.stdout.write(notification.params.delta);
     }
   });
 
-  const completion = new Promise<void>((resolveCompletion, rejectCompletion) => {
-    client.on("notification", (notification) => {
-      if (notification.method === "turn/completed") {
-        console.log(`\n[turn ${notification.params.turn.status}]`);
-        resolveCompletion();
-      }
-    });
-    client.once("disconnected", rejectCompletion);
-  });
+  const completion = new Promise<void>(
+    (resolveCompletion, rejectCompletion) => {
+      client.on("notification", (notification) => {
+        if (notification.method === "turn/completed") {
+          console.log(`\n[turn ${notification.params.turn.status}]`);
+          resolveCompletion();
+        }
+      });
+      client.once("disconnected", rejectCompletion);
+    },
+  );
 
   let stopping = false;
   process.on("SIGINT", () => {
@@ -177,14 +252,21 @@ async function main(): Promise<void> {
             }),
       });
     }
-    await manager.startTurn(options.prompt, options.model ? { model: options.model } : {});
+    await manager.startTurn(
+      options.prompt,
+      options.model ? { model: options.model } : {},
+    );
     await completion;
   } finally {
     await client.stop();
   }
 }
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.stack : error);
-  process.exitCode = 1;
-});
+if (
+  process.argv[1] &&
+  resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+)
+  main().catch((error) => {
+    console.error(error instanceof Error ? error.stack : error);
+    process.exitCode = 1;
+  });

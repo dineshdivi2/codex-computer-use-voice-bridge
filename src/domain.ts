@@ -68,6 +68,8 @@ export interface PendingIntervention extends Correlation {
 }
 
 export interface SanitizedPrompt {
+  taskTitle?: string;
+  choices?: string[];
   spoken: string;
   terminal: string;
   sensitivity: "normal" | "sensitive";
@@ -78,6 +80,8 @@ export interface ChannelAnswer {
   channel: "voice" | "terminal";
   text: string;
   error?: string;
+  errorCode?: string;
+  captureMayBeActive?: boolean;
   elapsedMs?: number;
 }
 
@@ -116,7 +120,11 @@ export function correlationFromRequest(
     requestId: request.id,
     threadId: String(params.threadId),
     turnId:
-      typeof params.turnId === "string" ? params.turnId : params.turnId === null ? null : null,
+      typeof params.turnId === "string"
+        ? params.turnId
+        : params.turnId === null
+          ? null
+          : null,
     itemId: typeof params.itemId === "string" ? params.itemId : null,
   };
 }

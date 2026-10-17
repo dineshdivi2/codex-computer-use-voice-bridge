@@ -56,7 +56,10 @@ export class ThreadAndTurnManager {
     return result.thread.id;
   }
 
-  async startTurn(text: string, overrides: Omit<TurnStartParams, "threadId" | "input"> = {}): Promise<string> {
+  async startTurn(
+    text: string,
+    overrides: Omit<TurnStartParams, "threadId" | "input"> = {},
+  ): Promise<string> {
     if (!this.activeThreadId) throw new Error("No active thread");
     const input: UserInput[] = [{ type: "text", text, text_elements: [] }];
     const result = await this.#client.startTurn({
@@ -69,7 +72,8 @@ export class ThreadAndTurnManager {
   }
 
   async steer(text: string): Promise<void> {
-    if (!this.activeThreadId || !this.activeTurnId) throw new Error("No active turn to steer");
+    if (!this.activeThreadId || !this.activeTurnId)
+      throw new Error("No active turn to steer");
     await this.#client.steerTurn({
       threadId: this.activeThreadId,
       expectedTurnId: this.activeTurnId,

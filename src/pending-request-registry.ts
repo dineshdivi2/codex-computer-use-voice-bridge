@@ -6,10 +6,7 @@ import type {
   SupportedServerRequest,
   TerminalInterventionState,
 } from "./domain.ts";
-import {
-  correlationFromRequest,
-  requestIdKey,
-} from "./domain.ts";
+import { correlationFromRequest, requestIdKey } from "./domain.ts";
 
 const TERMINAL_STATES = new Set<InterventionState>([
   "RESOLVED",
@@ -21,12 +18,33 @@ const TERMINAL_STATES = new Set<InterventionState>([
   "FAIL_CLOSED",
 ]);
 
-const ALLOWED_TRANSITIONS: Record<InterventionState, ReadonlySet<InterventionState>> = {
+const ALLOWED_TRANSITIONS: Record<
+  InterventionState,
+  ReadonlySet<InterventionState>
+> = {
   DETECTED: new Set(["REGISTERED", "FAIL_CLOSED"]),
-  REGISTERED: new Set(["POLICY_EVALUATED", "EXPIRED", "APP_SERVER_DISCONNECTED", "FAIL_CLOSED"]),
-  POLICY_EVALUATED: new Set(["PROMPT_SANITIZED", "FALLBACK_REQUIRED", "FAIL_CLOSED"]),
-  PROMPT_SANITIZED: new Set(["USER_NOTIFIED", "FALLBACK_REQUIRED", "FAIL_CLOSED"]),
-  USER_NOTIFIED: new Set(["CAPTURING_RESPONSE", "VOICE_TIMEOUT", "FALLBACK_REQUIRED", "FAIL_CLOSED"]),
+  REGISTERED: new Set([
+    "POLICY_EVALUATED",
+    "EXPIRED",
+    "APP_SERVER_DISCONNECTED",
+    "FAIL_CLOSED",
+  ]),
+  POLICY_EVALUATED: new Set([
+    "PROMPT_SANITIZED",
+    "FALLBACK_REQUIRED",
+    "FAIL_CLOSED",
+  ]),
+  PROMPT_SANITIZED: new Set([
+    "USER_NOTIFIED",
+    "FALLBACK_REQUIRED",
+    "FAIL_CLOSED",
+  ]),
+  USER_NOTIFIED: new Set([
+    "CAPTURING_RESPONSE",
+    "VOICE_TIMEOUT",
+    "FALLBACK_REQUIRED",
+    "FAIL_CLOSED",
+  ]),
   CAPTURING_RESPONSE: new Set([
     "VALIDATING_RESPONSE",
     "VOICE_TIMEOUT",
@@ -70,8 +88,16 @@ const ALLOWED_TRANSITIONS: Record<InterventionState, ReadonlySet<InterventionSta
     "FAIL_CLOSED",
   ]),
   RESOLVED: new Set(),
-  DECLINED: new Set(["RESPONDING_TO_APP_SERVER", "AWAITING_SERVER_RESOLUTION", "RESOLVED"]),
-  CANCELLED: new Set(["RESPONDING_TO_APP_SERVER", "AWAITING_SERVER_RESOLUTION", "RESOLVED"]),
+  DECLINED: new Set([
+    "RESPONDING_TO_APP_SERVER",
+    "AWAITING_SERVER_RESOLUTION",
+    "RESOLVED",
+  ]),
+  CANCELLED: new Set([
+    "RESPONDING_TO_APP_SERVER",
+    "AWAITING_SERVER_RESOLUTION",
+    "RESOLVED",
+  ]),
   EXPIRED: new Set(),
   TURN_COMPLETED_BEFORE_RESPONSE: new Set(),
   APP_SERVER_DISCONNECTED: new Set(),
@@ -86,7 +112,10 @@ export class PendingRequestRegistry {
     this.#clock = clock;
   }
 
-  register(request: SupportedServerRequest, expiresAtMs: number | null): PendingIntervention {
+  register(
+    request: SupportedServerRequest,
+    expiresAtMs: number | null,
+  ): PendingIntervention {
     const key = requestIdKey(request.id);
     if (this.#requests.has(key)) {
       throw new Error(`Duplicate server request id ${String(request.id)}`);
@@ -123,7 +152,9 @@ export class PendingRequestRegistry {
   ): PendingIntervention {
     const pending = this.#require(requestId);
     if (!ALLOWED_TRANSITIONS[pending.state].has(next)) {
-      throw new Error(`Invalid intervention transition ${pending.state} -> ${next}`);
+      throw new Error(
+        `Invalid intervention transition ${pending.state} -> ${next}`,
+      );
     }
     pending.state = next;
     pending.version += 1;
@@ -131,20 +162,29 @@ export class PendingRequestRegistry {
     return structuredClone(pending);
   }
 
-  assertRespondable(correlation: Correlation, expectedVersion?: number): PendingIntervention {
+  assertRespondable(
+    correlation: Correlation,
+    expectedVersion?: number,
+  ): PendingIntervention {
     const pending = this.#require(correlation.requestId);
     if (TERMINAL_STATES.has(pending.state)) {
-      throw new Error(`Request ${String(correlation.requestId)} is already ${pending.state}`);
+      throw new Error(
+        `Request ${String(correlation.requestId)} is already ${pending.state}`,
+      );
     }
     if (
       pending.threadId !== correlation.threadId ||
       pending.turnId !== correlation.turnId ||
       pending.itemId !== correlation.itemId
     ) {
-      throw new Error(`Correlation mismatch for request ${String(correlation.requestId)}`);
+      throw new Error(
+        `Correlation mismatch for request ${String(correlation.requestId)}`,
+      );
     }
     if (expectedVersion !== undefined && pending.version !== expectedVersion) {
-      throw new Error(`Stale intervention version for request ${String(correlation.requestId)}`);
+      throw new Error(
+        `Stale intervention version for request ${String(correlation.requestId)}`,
+      );
     }
     if (pending.expiresAtMs !== null && this.#clock() >= pending.expiresAtMs) {
       this.forceTerminal(correlation.requestId, "EXPIRED");
@@ -153,9 +193,16 @@ export class PendingRequestRegistry {
     return structuredClone(pending);
   }
 
-  resolveFromServer(threadId: string, requestId: RequestId): PendingIntervention | undefined {
+  resolveFromServer(
+    threadId: string,
+    requestId: RequestId,
+  ): PendingIntervention | undefined {
     const pending = this.#requests.get(requestIdKey(requestId));
-    if (!pending || pending.threadId !== threadId || TERMINAL_STATES.has(pending.state)) {
+    if (
+      !pending ||
+      pending.threadId !== threadId ||
+      TERMINAL_STATES.has(pending.state)
+    ) {
       return undefined;
     }
     pending.state = "RESOLVED";
@@ -208,7 +255,10 @@ export class PendingRequestRegistry {
     return changed;
   }
 
-  forceTerminal(requestId: RequestId, state: TerminalInterventionState): PendingIntervention {
+  forceTerminal(
+    requestId: RequestId,
+    state: TerminalInterventionState,
+  ): PendingIntervention {
     const pending = this.#require(requestId);
     if (TERMINAL_STATES.has(pending.state)) return structuredClone(pending);
     pending.state = state;
@@ -218,7 +268,8 @@ export class PendingRequestRegistry {
 
   #require(requestId: RequestId): PendingIntervention {
     const pending = this.#requests.get(requestIdKey(requestId));
-    if (!pending) throw new Error(`Unknown server request id ${String(requestId)}`);
+    if (!pending)
+      throw new Error(`Unknown server request id ${String(requestId)}`);
     return pending;
   }
 }

@@ -1,15 +1,19 @@
 import { createInterface } from "node:readline/promises";
 import type { Readable, Writable } from "node:stream";
 import { execFile as execFileCallback } from "node:child_process";
-import { resolve } from "node:path";
 import { promisify } from "node:util";
+import { createCaptureClient } from "../plugin/job-form-voice-bridge/mcp/capture.mjs";
 import { CodexDictationHistory } from "./codex-dictation-history.ts";
 import type { ChannelAnswer, SanitizedPrompt } from "./domain.ts";
 
 const execFile = promisify(execFileCallback);
 
 export interface InterventionChannel {
-  ask(prompt: SanitizedPrompt, timeoutMs?: number): Promise<ChannelAnswer>;
+  ask(
+    prompt: SanitizedPrompt,
+    timeoutMs?: number,
+    signal?: AbortSignal,
+  ): Promise<ChannelAnswer>;
 }
 
 export interface VoiceChannelOptions {
@@ -27,7 +31,8 @@ export class VoiceInterventionAdapter implements InterventionChannel {
   constructor(options: VoiceChannelOptions = {}) {
     this.#baseUrl = options.baseUrl ?? "http://127.0.0.1:8766";
     this.#listenSeconds = options.listenSeconds ?? 15;
-    this.#launcherScript = options.launcherScript ?? process.env.VOICE_BRIDGE_SCRIPT;
+    this.#launcherScript =
+      options.launcherScript ?? process.env.VOICE_BRIDGE_SCRIPT;
   }
 
   ask(prompt: SanitizedPrompt, timeoutMs = 110_000): Promise<ChannelAnswer> {
@@ -36,7 +41,10 @@ export class VoiceInterventionAdapter implements InterventionChannel {
     return run;
   }
 
-  async #askNow(prompt: SanitizedPrompt, timeoutMs: number): Promise<ChannelAnswer> {
+  async #askNow(
+    prompt: SanitizedPrompt,
+    timeoutMs: number,
+  ): Promise<ChannelAnswer> {
     const startedAt = Date.now();
     if (!(await this.#isHealthy()) && this.#launcherScript) {
       return this.#askViaLauncher(prompt, timeoutMs, startedAt);
@@ -120,7 +128,8 @@ export class VoiceInterventionAdapter implements InterventionChannel {
         { timeout: timeoutMs, windowsHide: true, maxBuffer: 1_000_000 },
       );
       const lines = stdout.trim().split(/\r?\n/).reverse();
-      let payload: { ok?: boolean; text?: string; error?: string | null } | undefined;
+      let payload:
+        { ok?: boolean; text?: string; error?: string | null } | undefined;
       for (const line of lines) {
         try {
           payload = JSON.parse(line);
@@ -134,7 +143,8 @@ export class VoiceInterventionAdapter implements InterventionChannel {
           ok: false,
           channel: "voice",
           text: "",
-          error: payload?.error ?? "Voice launcher returned no usable JSON result",
+          error:
+            payload?.error ?? "Voice launcher returned no usable JSON result",
           elapsedMs: Date.now() - startedAt,
         };
       }
@@ -165,133 +175,43 @@ export interface CodexDictationChannelOptions {
   history?: CodexDictationHistory;
 }
 
-interface DictationLauncherPayload {
-  ok?: boolean;
-  text?: string;
-  error?: string | null;
-  source?: string;
-}
-
 export class CodexDictationInterventionAdapter implements InterventionChannel {
-  readonly #launcherScript: string;
-  readonly #powershellBinary: string;
-  readonly #hotkey: string;
-  readonly #timeoutMs: number;
-  readonly #autoStopSeconds: number;
-  readonly #history: CodexDictationHistory;
-  #tail: Promise<unknown> = Promise.resolve();
-
+  readonly #capture: ReturnType<typeof createCaptureClient>;
+  readonly #options: CodexDictationChannelOptions;
   constructor(options: CodexDictationChannelOptions = {}) {
-    this.#launcherScript =
-      options.launcherScript ??
-      resolve(import.meta.dirname, "..", "scripts", "capture-codex-dictation.ps1");
-    this.#powershellBinary = options.powershellBinary ?? "powershell.exe";
-    this.#hotkey = options.hotkey ?? "%n";
-    this.#timeoutMs = options.timeoutMs ?? 120_000;
-    this.#autoStopSeconds = options.autoStopSeconds ?? 0;
-    this.#history = options.history ?? new CodexDictationHistory();
-  }
-
-  ask(prompt: SanitizedPrompt, timeoutMs = this.#timeoutMs): Promise<ChannelAnswer> {
-    const run = this.#tail.then(() => this.#askNow(prompt, timeoutMs));
-    this.#tail = run.catch(() => undefined);
-    return run;
-  }
-
-  async #askNow(prompt: SanitizedPrompt, timeoutMs: number): Promise<ChannelAnswer> {
-    const startedAt = Date.now();
-    try {
-      const baselineIds = await this.#history.snapshotIds();
-      const launcherAbort = new AbortController();
-      const historyAbort = new AbortController();
-      const launcher = this.#askViaLauncher(prompt, timeoutMs, launcherAbort.signal);
-      const history = this.#history
-        .waitForTranscript({
-          baselineIds,
-          startedAtMs: startedAt,
-          timeoutMs,
-          surface: "global",
-          signal: historyAbort.signal,
-        })
-        .then((record) => record.text);
-
-      try {
-        const text = await Promise.any([launcher, history]);
-        return {
-          ok: true,
-          channel: "voice",
-          text: text.trim(),
-          elapsedMs: Date.now() - startedAt,
-        };
-      } finally {
-        launcherAbort.abort();
-        historyAbort.abort();
-      }
-    } catch (error) {
-      const detail = error instanceof AggregateError
-        ? error.errors
-            .map((nested) => (nested instanceof Error ? nested.message : String(nested)))
-            .join("; ")
-        : error instanceof Error
-          ? error.message
-          : String(error);
-      return {
-        ok: false,
-        channel: "voice",
-        text: "",
-        error: detail,
-        elapsedMs: Date.now() - startedAt,
-      };
-    }
-  }
-
-  async #askViaLauncher(
-    prompt: SanitizedPrompt,
-    timeoutMs: number,
-    signal: AbortSignal,
-  ): Promise<string> {
-    const args = [
-      "-NoLogo",
-      "-NoProfile",
-      "-NonInteractive",
-      "-ExecutionPolicy",
-      "Bypass",
-      "-File",
-      this.#launcherScript,
-      "-Prompt",
-      prompt.spoken,
-      "-TimeoutSeconds",
-      String(Math.max(15, Math.ceil(timeoutMs / 1_000))),
-      "-Hotkey",
-      this.#hotkey,
-      "-HistoryRoot",
-      this.#history.historyRoot,
-      "-LegacyHistoryFile",
-      this.#history.legacyHistoryFile,
-    ];
-    if (this.#autoStopSeconds > 0) {
-      args.push("-AutoStopSeconds", String(this.#autoStopSeconds));
-    }
-    const { stdout } = await execFile(this.#powershellBinary, args, {
-      timeout: timeoutMs + 5_000,
-      windowsHide: true,
-      maxBuffer: 1_000_000,
-      signal,
+    this.#options = options;
+    this.#capture = createCaptureClient({
+      launcherScript: options.launcherScript,
+      powershellBinary: options.powershellBinary,
     });
-    const lines = stdout.trim().split(/\r?\n/).reverse();
-    let payload: DictationLauncherPayload | undefined;
-    for (const line of lines) {
-      try {
-        payload = JSON.parse(line) as DictationLauncherPayload;
-        break;
-      } catch {
-        // Ignore diagnostics and keep looking for the final JSON result.
-      }
-    }
-    if (!payload?.ok || !payload.text?.trim()) {
-      throw new Error(payload?.error ?? "Codex Dictation launcher returned no transcript");
-    }
-    return payload.text.trim();
+  }
+  async ask(
+    prompt: SanitizedPrompt,
+    timeoutMs = this.#options.timeoutMs ?? 120_000,
+    signal?: AbortSignal,
+  ): Promise<ChannelAnswer> {
+    const result = await this.#capture(
+      {
+        prompt: prompt.spoken,
+        taskTitle: prompt.taskTitle,
+        options: prompt.choices,
+        timeoutMs,
+        hotkey: this.#options.hotkey,
+        autoStopSeconds: this.#options.autoStopSeconds,
+        historyRoot: this.#options.history?.historyRoot,
+        legacyHistoryFile: this.#options.history?.legacyHistoryFile,
+      },
+      signal,
+    );
+    return {
+      ok: result.ok,
+      channel: result.source === "typed" ? "terminal" : "voice",
+      text: result.text ?? "",
+      error: result.error,
+      errorCode: result.code,
+      elapsedMs: result.totalElapsedMs ?? undefined,
+      captureMayBeActive: result.captureMayBeActive,
+    };
   }
 }
 
@@ -299,30 +219,65 @@ export class TerminalFallbackChannel implements InterventionChannel {
   readonly #input: Readable;
   readonly #output: Writable;
   #tail: Promise<unknown> = Promise.resolve();
-
-  constructor(input: Readable = process.stdin, output: Writable = process.stdout) {
+  constructor(
+    input: Readable = process.stdin,
+    output: Writable = process.stdout,
+  ) {
     this.#input = input;
     this.#output = output;
   }
-
-  ask(prompt: SanitizedPrompt): Promise<ChannelAnswer> {
-    const run = this.#tail.then(() => this.#askNow(prompt));
-    this.#tail = run.catch(() => undefined);
+  ask(
+    prompt: SanitizedPrompt,
+    timeoutMs = 120_000,
+    signal?: AbortSignal,
+  ): Promise<ChannelAnswer> {
+    const deadline = AbortSignal.timeout(Math.max(1, timeoutMs));
+    const active = signal ? AbortSignal.any([signal, deadline]) : deadline;
+    const run = this.#tail.then(() => this.#askNow(prompt, active));
+    this.#tail = run.catch(() => {});
     return run;
   }
-
-  async #askNow(prompt: SanitizedPrompt): Promise<ChannelAnswer> {
+  async #askNow(
+    prompt: SanitizedPrompt,
+    signal: AbortSignal,
+  ): Promise<ChannelAnswer> {
     const startedAt = Date.now();
-    const terminal = createInterface({ input: this.#input, output: this.#output });
+    if (signal.aborted)
+      return {
+        ok: false,
+        channel: "terminal",
+        text: "",
+        errorCode: "cancelled",
+      };
+    if (!(this.#input as Readable & { isTTY?: boolean }).isTTY) {
+      return {
+        ok: false,
+        channel: "terminal",
+        text: "",
+        error: "No interactive terminal is available. Use the response window.",
+        errorCode: "unavailable",
+      };
+    }
+    const terminal = createInterface({
+      input: this.#input,
+      output: this.#output,
+    });
     try {
       this.#output.write(`\n[Codex intervention]\n${prompt.terminal}\n`);
-      const text = await terminal.question("Answer: ");
+      const text = await terminal.question("Answer: ", { signal });
       return {
         ok: Boolean(text.trim()),
         channel: "terminal",
         text: text.trim(),
-        error: text.trim() ? undefined : "No terminal answer supplied",
         elapsedMs: Date.now() - startedAt,
+      };
+    } catch {
+      return {
+        ok: false,
+        channel: "terminal",
+        text: "",
+        error: "Question cancelled or timed out.",
+        errorCode: signal.aborted ? "cancelled" : "unavailable",
       };
     } finally {
       terminal.close();
@@ -340,7 +295,12 @@ export class StaticChannel implements InterventionChannel {
   async ask(): Promise<ChannelAnswer> {
     const answer = this.#answers.shift();
     if (!answer) {
-      return { ok: false, channel: "terminal", text: "", error: "No fixture answer" };
+      return {
+        ok: false,
+        channel: "terminal",
+        text: "",
+        error: "No fixture answer",
+      };
     }
     return answer;
   }

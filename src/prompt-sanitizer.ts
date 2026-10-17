@@ -35,7 +35,8 @@ function terminalSummary(request: SupportedServerRequest): string {
     reason: typeof params.reason === "string" ? redact(params.reason) : null,
     cwd: typeof params.cwd === "string" ? params.cwd : null,
     networkApprovalContext:
-      params.networkApprovalContext && typeof params.networkApprovalContext === "object"
+      params.networkApprovalContext &&
+      typeof params.networkApprovalContext === "object"
         ? params.networkApprovalContext
         : null,
   };
@@ -83,12 +84,15 @@ export class PromptSanitizer {
       }
       if (question.isSecret) {
         return {
-          spoken: "Codex needs sensitive information. Please use the secure visual prompt.",
+          spoken:
+            "Codex needs sensitive information. Please use the secure visual prompt.",
           terminal: `${question.header}: sensitive answer required; value will not be logged.`,
           sensitivity: "sensitive",
         };
       }
-      const options = question.options?.map((option) => option.label).join(", ");
+      const options = question.options
+        ?.map((option) => option.label)
+        .join(", ");
       const spoken = options
         ? `${redact(question.question)} Options are: ${redact(options)}.`
         : redact(question.question);

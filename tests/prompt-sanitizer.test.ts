@@ -11,7 +11,10 @@ test("never speaks the full command or secret token", () => {
 });
 
 test("redacts secret-like values from spoken user questions", () => {
-  const request = userInputRequest(2, "Use token=abcdef1234567890 for which environment?");
+  const request = userInputRequest(
+    2,
+    "Use token=abcdef1234567890 for which environment?",
+  );
   const prompt = new PromptSanitizer().sanitize(request as never);
   assert.equal(prompt.spoken.includes("abcdef1234567890"), false);
   assert.match(prompt.spoken, /REDACTED/);

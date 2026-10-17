@@ -12,7 +12,10 @@ import type { TurnSteerParams } from "../schemas/typescript/v2/TurnSteerParams.t
 import type { TurnSteerResponse } from "../schemas/typescript/v2/TurnSteerResponse.ts";
 import type { RequestId } from "../schemas/typescript/RequestId.ts";
 import { JsonLinePeer } from "./jsonl-peer.ts";
-import { CodexProcessManager, type ProcessManagerOptions } from "./process-manager.ts";
+import {
+  CodexProcessManager,
+  type ProcessManagerOptions,
+} from "./process-manager.ts";
 
 export interface InitializeOptions {
   clientName?: string;
@@ -30,13 +33,19 @@ export class AppServerClient extends EventEmitter {
     super();
     this.processManager = manager;
     this.peer = peer;
-    peer.on("serverRequest", (message) => this.emit("serverRequest", message as ServerRequest));
-    peer.on("notification", (message) => this.emit("notification", message as ServerNotification));
+    peer.on("serverRequest", (message) =>
+      this.emit("serverRequest", message as ServerRequest),
+    );
+    peer.on("notification", (message) =>
+      this.emit("notification", message as ServerNotification),
+    );
     peer.on("protocolError", (error) => this.emit("protocolError", error));
     peer.on("disconnected", (error) => this.emit("disconnected", error));
     manager.on("stderr", (chunk) => this.emit("stderr", chunk));
     manager.on("exit", (status) => {
-      peer.close(new Error(`Codex app-server exited: ${JSON.stringify(status)}`));
+      peer.close(
+        new Error(`Codex app-server exited: ${JSON.stringify(status)}`),
+      );
       this.emit("exit", status);
     });
   }
@@ -44,11 +53,15 @@ export class AppServerClient extends EventEmitter {
   static spawn(options: ProcessManagerOptions = {}): AppServerClient {
     const manager = new CodexProcessManager(options);
     const child = manager.start();
-    return new AppServerClient(manager, new JsonLinePeer(child.stdout, child.stdin));
+    return new AppServerClient(
+      manager,
+      new JsonLinePeer(child.stdout, child.stdin),
+    );
   }
 
   async initialize(options: InitializeOptions = {}): Promise<unknown> {
-    if (this.#initialized) throw new Error("App-server connection already initialized");
+    if (this.#initialized)
+      throw new Error("App-server connection already initialized");
     const result = await this.peer.request("initialize", {
       clientInfo: {
         name: options.clientName ?? "codex_human_intervention_harness",
@@ -71,15 +84,29 @@ export class AppServerClient extends EventEmitter {
   }
 
   async startThread(params: ThreadStartParams): Promise<ThreadStartResponse> {
-    return (await this.peer.request("thread/start", params, 60_000)) as ThreadStartResponse;
+    return (await this.peer.request(
+      "thread/start",
+      params,
+      60_000,
+    )) as ThreadStartResponse;
   }
 
-  async resumeThread(params: ThreadResumeParams): Promise<ThreadResumeResponse> {
-    return (await this.peer.request("thread/resume", params, 60_000)) as ThreadResumeResponse;
+  async resumeThread(
+    params: ThreadResumeParams,
+  ): Promise<ThreadResumeResponse> {
+    return (await this.peer.request(
+      "thread/resume",
+      params,
+      60_000,
+    )) as ThreadResumeResponse;
   }
 
   async startTurn(params: TurnStartParams): Promise<TurnStartResponse> {
-    return (await this.peer.request("turn/start", params, 60_000)) as TurnStartResponse;
+    return (await this.peer.request(
+      "turn/start",
+      params,
+      60_000,
+    )) as TurnStartResponse;
   }
 
   async steerTurn(params: TurnSteerParams): Promise<TurnSteerResponse> {

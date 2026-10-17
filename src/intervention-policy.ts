@@ -10,12 +10,15 @@ export interface PolicyDecision {
 
 function containsSensitiveMarker(value: unknown): boolean {
   if (typeof value === "string") {
-    return /password|secret|token|credential|private key|otp|one[- ]time code/i.test(value);
+    return /password|secret|token|credential|private key|otp|one[- ]time code/i.test(
+      value,
+    );
   }
   if (Array.isArray(value)) return value.some(containsSensitiveMarker);
   if (value && typeof value === "object") {
     return Object.entries(value).some(
-      ([key, nested]) => containsSensitiveMarker(key) || containsSensitiveMarker(nested),
+      ([key, nested]) =>
+        containsSensitiveMarker(key) || containsSensitiveMarker(nested),
     );
   }
   return false;

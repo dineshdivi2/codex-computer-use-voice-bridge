@@ -30,12 +30,18 @@ export class JsonLinePeer extends EventEmitter {
     this.#output = output;
     this.#reader = readline.createInterface({ input, crlfDelay: Infinity });
     this.#reader.on("line", (line) => this.#onLine(line));
-    this.#reader.on("close", () => this.close(new Error("app-server stream closed")));
+    this.#reader.on("close", () =>
+      this.close(new Error("app-server stream closed")),
+    );
     this.#input.on("error", (error) => this.close(error));
     this.#output.on("error", (error) => this.close(error));
   }
 
-  request(method: string, params: unknown, timeoutMs = 30_000): Promise<unknown> {
+  request(
+    method: string,
+    params: unknown,
+    timeoutMs = 30_000,
+  ): Promise<unknown> {
     if (this.#closed) {
       return Promise.reject(new Error("Cannot send request: peer is closed"));
     }
@@ -84,15 +90,22 @@ export class JsonLinePeer extends EventEmitter {
     try {
       message = JSON.parse(line);
     } catch (error) {
-      this.emit("protocolError", new Error(`Invalid JSONL message: ${String(error)}`));
+      this.emit(
+        "protocolError",
+        new Error(`Invalid JSONL message: ${String(error)}`),
+      );
       return;
     }
     if (!isObject(message)) {
-      this.emit("protocolError", new Error("App-server message was not an object"));
+      this.emit(
+        "protocolError",
+        new Error("App-server message was not an object"),
+      );
       return;
     }
 
-    const hasId = typeof message.id === "string" || typeof message.id === "number";
+    const hasId =
+      typeof message.id === "string" || typeof message.id === "number";
     const hasMethod = typeof message.method === "string";
     if (hasId && hasMethod) {
       this.emit("serverRequest", message);
@@ -121,6 +134,9 @@ export class JsonLinePeer extends EventEmitter {
       this.emit("notification", message);
       return;
     }
-    this.emit("protocolError", new Error("Unrecognized app-server message shape"));
+    this.emit(
+      "protocolError",
+      new Error("Unrecognized app-server message shape"),
+    );
   }
 }

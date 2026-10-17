@@ -41,11 +41,17 @@ export class MemoryAuditLog implements AuditSink {
   readonly events: AuditEvent[] = [];
 
   async write(event: AuditEvent): Promise<void> {
-    this.events.push({ timestamp: new Date().toISOString(), ...structuredClone(event) });
+    this.events.push({
+      timestamp: new Date().toISOString(),
+      ...structuredClone(event),
+    });
   }
 }
 
-export function auditFromPending(event: string, pending: PendingIntervention): AuditEvent {
+export function auditFromPending(
+  event: string,
+  pending: PendingIntervention,
+): AuditEvent {
   return {
     event,
     requestId: pending.requestId,

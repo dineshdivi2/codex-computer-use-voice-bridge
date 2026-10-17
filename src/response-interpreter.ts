@@ -4,12 +4,13 @@ import type { McpServerElicitationRequestResponse } from "../schemas/typescript/
 import type { PermissionsRequestApprovalResponse } from "../schemas/typescript/v2/PermissionsRequestApprovalResponse.ts";
 import type { ToolRequestUserInputResponse } from "../schemas/typescript/v2/ToolRequestUserInputResponse.ts";
 import type { Interpretation, SupportedServerRequest } from "./domain.ts";
+import {
+  matchChoice,
+  normalizeAnswer,
+} from "../plugin/job-form-voice-bridge/mcp/answers.mjs";
 
 function normalize(text: string): string {
-  return text
-    .toLocaleLowerCase("en-US")
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
+  return normalizeAnswer(text);
 }
 
 function normalizeBoundedChoice(text: string): string {
@@ -60,7 +61,8 @@ function approvalMeaning(text: string): ApprovalMeaning | null {
   ) {
     return "acceptForSession";
   }
-  if (["decline", "reject", "do not approve", "deny"].includes(value)) return "decline";
+  if (["decline", "reject", "do not approve", "deny"].includes(value))
+    return "decline";
   if (["cancel", "stop", "stop the turn"].includes(value)) return "cancel";
   return null;
 }
@@ -74,7 +76,13 @@ function approvalAmbiguous(): Interpretation {
   };
 }
 
-function interpretSimpleForm(request: Extract<SupportedServerRequest, { method: "mcpServer/elicitation/request" }>, text: string): Interpretation {
+function interpretSimpleForm(
+  request: Extract<
+    SupportedServerRequest,
+    { method: "mcpServer/elicitation/request" }
+  >,
+  text: string,
+): Interpretation {
   if (request.params.mode === "url") {
     return {
       kind: "ambiguous",
@@ -82,33 +90,43 @@ function interpretSimpleForm(request: Extract<SupportedServerRequest, { method: 
       clarification: "Complete or cancel this request in the visual fallback.",
     };
   }
-  const schema = request.params.requestedSchema as unknown as Record<string, unknown>;
-  const properties = schema.properties as Record<string, Record<string, unknown>> | undefined;
+  const schema = request.params.requestedSchema as unknown as Record<
+    string,
+    unknown
+  >;
+  const properties = schema.properties as
+    Record<string, Record<string, unknown>> | undefined;
   const keys = properties ? Object.keys(properties) : [];
   if (keys.length !== 1) {
     return {
       kind: "ambiguous",
       reason: "Voice MVP supports only one-field MCP forms",
-      clarification: "Please answer this structured form in the terminal fallback.",
+      clarification:
+        "Please answer this structured form in the terminal fallback.",
     };
   }
   const key = keys[0];
   const property = properties![key];
   let value: string | boolean = text.trim();
   if (Array.isArray(property.enum)) {
-    let match = property.enum.find(
-      (candidate) =>
-        typeof candidate === "string" && normalize(candidate) === normalizeBoundedChoice(text),
+    let match = matchChoice(
+      normalizeBoundedChoice(text),
+      property.enum.filter(
+        (candidate): candidate is string => typeof candidate === "string",
+      ),
     );
     if (key === "decision" && match === undefined) {
       const meaning = approvalMeaning(text);
-      const canonical = meaning === "accept"
-        ? "approve once"
-        : meaning === "acceptForSession"
-          ? "approve for session"
-          : meaning;
+      const canonical =
+        meaning === "accept"
+          ? "approve once"
+          : meaning === "acceptForSession"
+            ? "approve for session"
+            : meaning;
       match = property.enum.find(
-        (candidate) => typeof candidate === "string" && normalize(candidate) === normalize(canonical ?? ""),
+        (candidate) =>
+          typeof candidate === "string" &&
+          normalize(candidate) === normalize(canonical ?? ""),
       );
     }
     if (match === undefined) {
@@ -137,6 +155,27 @@ function interpretSimpleForm(request: Extract<SupportedServerRequest, { method: 
       clarification: "Please answer this form in the terminal fallback.",
     };
   }
+  if (typeof value === "string") {
+    const tooShort =
+      typeof property.minLength === "number" &&
+      [...value].length < property.minLength;
+    const tooLong =
+      typeof property.maxLength === "number" &&
+      [...value].length > property.maxLength;
+    // Regex dialects differ: do not claim validation of arbitrary JSON Schema patterns.
+    if (
+      tooShort ||
+      tooLong ||
+      property.pattern !== undefined ||
+      property.format !== undefined
+    ) {
+      return {
+        kind: "ambiguous",
+        reason: "Answer requires additional field validation",
+        clarification: "Please check this field in the visual or typed flow.",
+      };
+    }
+  }
   const response: McpServerElicitationRequestResponse = {
     action: "accept",
     content: { [key]: value },
@@ -163,7 +202,12 @@ export class ResponseInterpreter {
         kind: "valid",
         response,
         decision,
-        terminalState: decision === "decline" ? "DECLINED" : decision === "cancel" ? "CANCELLED" : undefined,
+        terminalState:
+          decision === "decline"
+            ? "DECLINED"
+            : decision === "cancel"
+              ? "CANCELLED"
+              : undefined,
       };
     }
 
@@ -175,23 +219,29 @@ export class ResponseInterpreter {
         kind: "valid",
         response,
         decision,
-        terminalState: decision === "decline" ? "DECLINED" : decision === "cancel" ? "CANCELLED" : undefined,
+        terminalState:
+          decision === "decline"
+            ? "DECLINED"
+            : decision === "cancel"
+              ? "CANCELLED"
+              : undefined,
       };
     }
 
     if (request.method === "item/permissions/requestApproval") {
       const decision = approvalMeaning(text);
       if (!decision) return approvalAmbiguous();
-      const granted = decision === "accept" || decision === "acceptForSession"
-        ? {
-            ...(request.params.permissions.network
-              ? { network: request.params.permissions.network }
-              : {}),
-            ...(request.params.permissions.fileSystem
-              ? { fileSystem: request.params.permissions.fileSystem }
-              : {}),
-          }
-        : {};
+      const granted =
+        decision === "accept" || decision === "acceptForSession"
+          ? {
+              ...(request.params.permissions.network
+                ? { network: request.params.permissions.network }
+                : {}),
+              ...(request.params.permissions.fileSystem
+                ? { fileSystem: request.params.permissions.fileSystem }
+                : {}),
+            }
+          : {};
       const response: PermissionsRequestApprovalResponse = {
         permissions: granted,
         scope: decision === "acceptForSession" ? "session" : "turn",
@@ -200,7 +250,12 @@ export class ResponseInterpreter {
         kind: "valid",
         response,
         decision,
-        terminalState: decision === "decline" ? "DECLINED" : decision === "cancel" ? "CANCELLED" : undefined,
+        terminalState:
+          decision === "decline"
+            ? "DECLINED"
+            : decision === "cancel"
+              ? "CANCELLED"
+              : undefined,
       };
     }
 
@@ -209,7 +264,8 @@ export class ResponseInterpreter {
         return {
           kind: "ambiguous",
           reason: "Voice MVP handles one user-input question at a time",
-          clarification: "Please answer the questions in the terminal fallback.",
+          clarification:
+            "Please answer the questions in the terminal fallback.",
         };
       }
       const question = request.params.questions[0];
@@ -222,8 +278,12 @@ export class ResponseInterpreter {
       }
       let answer = text.trim();
       if (question.options) {
+        const matched = matchChoice(
+          normalizeBoundedChoice(text),
+          question.options.map((candidate) => candidate.label),
+        );
         const option = question.options.find(
-          (candidate) => normalize(candidate.label) === normalizeBoundedChoice(text),
+          (candidate) => candidate.label === matched,
         );
         if (!option && !question.isOther) {
           return {

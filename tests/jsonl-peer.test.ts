@@ -15,7 +15,9 @@ test("JSONL peer correlates client request responses", async () => {
   const [chunk] = await written;
   const request = JSON.parse(String(chunk));
   assert.equal(request.method, "initialize");
-  serverOutput.write(`${JSON.stringify({ id: request.id, result: { ok: true } })}\n`);
+  serverOutput.write(
+    `${JSON.stringify({ id: request.id, result: { ok: true } })}\n`,
+  );
   assert.deepEqual(await pending, { ok: true });
   peer.close();
 });
@@ -27,8 +29,12 @@ test("JSONL peer distinguishes server requests and notifications", async () => {
   const serverRequest = once(peer, "serverRequest");
   const notification = once(peer, "notification");
 
-  serverOutput.write(`${JSON.stringify({ method: "item/tool/requestUserInput", id: 99, params: {} })}\n`);
-  serverOutput.write(`${JSON.stringify({ method: "turn/completed", params: {} })}\n`);
+  serverOutput.write(
+    `${JSON.stringify({ method: "item/tool/requestUserInput", id: 99, params: {} })}\n`,
+  );
+  serverOutput.write(
+    `${JSON.stringify({ method: "turn/completed", params: {} })}\n`,
+  );
 
   assert.equal((await serverRequest)[0].id, 99);
   assert.equal((await notification)[0].method, "turn/completed");

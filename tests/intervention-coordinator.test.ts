@@ -3,12 +3,23 @@ import test from "node:test";
 import { MemoryAuditLog } from "../src/audit-log.ts";
 import { StaticChannel, type InterventionChannel } from "../src/channels.ts";
 import type { ChannelAnswer, SanitizedPrompt } from "../src/domain.ts";
-import { InterventionCoordinator, type ServerResponder } from "../src/intervention-coordinator.ts";
-import { commandApproval, userInputRequest } from "./helpers.ts";
+import {
+  InterventionCoordinator,
+  type ServerResponder,
+} from "../src/intervention-coordinator.ts";
+import {
+  commandApproval,
+  userInputRequest,
+  mcpFormRequest,
+} from "./helpers.ts";
 
 class FakeResponder implements ServerResponder {
   readonly responses: Array<{ id: string | number; result: unknown }> = [];
-  readonly errors: Array<{ id: string | number; code: number; message: string }> = [];
+  readonly errors: Array<{
+    id: string | number;
+    code: number;
+    message: string;
+  }> = [];
   respond(id: string | number, result: unknown): void {
     this.responses.push({ id, result });
   }
@@ -37,19 +48,29 @@ class RecordingChannel implements InterventionChannel {
 
   async ask(prompt: SanitizedPrompt): Promise<ChannelAnswer> {
     this.prompts.push(prompt);
-    return this.#answers.shift() ?? {
-      ok: false,
-      channel: "voice",
-      text: "",
-      error: "No fixture answer",
-    };
+    return (
+      this.#answers.shift() ?? {
+        ok: false,
+        channel: "voice",
+        text: "",
+        error: "No fixture answer",
+      }
+    );
   }
 }
 
-function makeCoordinator(voice: InterventionChannel, fallback: InterventionChannel) {
+function makeCoordinator(
+  voice: InterventionChannel,
+  fallback: InterventionChannel,
+) {
   const responder = new FakeResponder();
   const audit = new MemoryAuditLog();
-  const coordinator = new InterventionCoordinator({ responder, voice, fallback, audit });
+  const coordinator = new InterventionCoordinator({
+    responder,
+    voice,
+    fallback,
+    audit,
+  });
   return { coordinator, responder, audit };
 }
 
@@ -65,22 +86,34 @@ test("sends one correlated response and records server resolution", async () => 
       result: { answers: { environment: { answers: ["Staging"] } } },
     },
   ]);
-  assert.equal(coordinator.registry.get(12)?.state, "AWAITING_SERVER_RESOLUTION");
+  assert.equal(
+    coordinator.registry.get(12)?.state,
+    "AWAITING_SERVER_RESOLUTION",
+  );
   await coordinator.handleNotification({
     method: "serverRequest/resolved",
     params: { threadId: "thread-a", requestId: 12 },
   });
   assert.equal(coordinator.registry.get(12)?.state, "RESOLVED");
-  assert.equal(audit.events.filter((event) => event.event === "response-sent").length, 1);
+  assert.equal(
+    audit.events.filter((event) => event.event === "response-sent").length,
+    1,
+  );
 });
 
 test("falls back to terminal after voice timeout", async () => {
   const { coordinator, responder } = makeCoordinator(
-    new StaticChannel([{ ok: false, channel: "voice", text: "", error: "timeout" }]),
-    new StaticChannel([{ ok: true, channel: "terminal", text: "approve once" }]),
+    new StaticChannel([
+      { ok: false, channel: "voice", text: "", error: "timeout" },
+    ]),
+    new StaticChannel([
+      { ok: true, channel: "terminal", text: "approve once" },
+    ]),
   );
   await coordinator.handleServerRequest(commandApproval(13));
-  assert.deepEqual(responder.responses, [{ id: 13, result: { decision: "accept" } }]);
+  assert.deepEqual(responder.responses, [
+    { id: 13, result: { decision: "accept" } },
+  ]);
   assert.equal(coordinator.registry.get(13)?.channel, "terminal");
 });
 
@@ -89,16 +122,27 @@ test("ambiguous voice input gets an explicit bounded clarification", async () =>
     { ok: true, channel: "voice", text: "yes" },
     { ok: true, channel: "voice", text: "approve once" },
   ]);
-  const { coordinator, responder } = makeCoordinator(voice, new StaticChannel([]));
+  const { coordinator, responder } = makeCoordinator(
+    voice,
+    new StaticChannel([]),
+  );
   await coordinator.handleServerRequest(commandApproval(131));
   assert.equal(voice.prompts.length, 2);
-  assert.match(voice.prompts[1].spoken, /approve once, approve for session, decline, or cancel/i);
-  assert.deepEqual(responder.responses, [{ id: 131, result: { decision: "accept" } }]);
+  assert.match(
+    voice.prompts[1].spoken,
+    /approve once, approve for session, decline, or cancel/i,
+  );
+  assert.deepEqual(responder.responses, [
+    { id: 131, result: { decision: "accept" } },
+  ]);
 });
 
 test("late voice answer cannot resolve a completed turn", async () => {
   const voice = new DeferredChannel();
-  const { coordinator, responder } = makeCoordinator(voice, new StaticChannel([]));
+  const { coordinator, responder } = makeCoordinator(
+    voice,
+    new StaticChannel([]),
+  );
   const handling = coordinator.handleServerRequest(userInputRequest(14));
   await new Promise((resolve) => setImmediate(resolve));
   await coordinator.handleNotification({
@@ -120,12 +164,18 @@ test("late voice answer cannot resolve a completed turn", async () => {
   voice.resolve({ ok: true, channel: "voice", text: "Staging" });
   await handling;
   assert.deepEqual(responder.responses, []);
-  assert.equal(coordinator.registry.get(14)?.state, "TURN_COMPLETED_BEFORE_RESPONSE");
+  assert.equal(
+    coordinator.registry.get(14)?.state,
+    "TURN_COMPLETED_BEFORE_RESPONSE",
+  );
 });
 
 test("disconnect invalidates every pending intervention", async () => {
   const voice = new DeferredChannel();
-  const { coordinator, responder } = makeCoordinator(voice, new StaticChannel([]));
+  const { coordinator, responder } = makeCoordinator(
+    voice,
+    new StaticChannel([]),
+  );
   const handling = coordinator.handleServerRequest(userInputRequest(15));
   await new Promise((resolve) => setImmediate(resolve));
   await coordinator.handleDisconnect();
@@ -140,7 +190,10 @@ test("concurrent requests cannot consume each other's answer or request id", asy
     { ok: true, channel: "voice", text: "Staging" },
     { ok: true, channel: "voice", text: "Production" },
   ]);
-  const { coordinator, responder } = makeCoordinator(voice, new StaticChannel([]));
+  const { coordinator, responder } = makeCoordinator(
+    voice,
+    new StaticChannel([]),
+  );
   await Promise.all([
     coordinator.handleServerRequest(userInputRequest(21)),
     coordinator.handleServerRequest(userInputRequest(22)),
@@ -148,8 +201,106 @@ test("concurrent requests cannot consume each other's answer or request id", asy
   assert.deepEqual(
     responder.responses.sort((a, b) => Number(a.id) - Number(b.id)),
     [
-      { id: 21, result: { answers: { environment: { answers: ["Staging"] } } } },
-      { id: 22, result: { answers: { environment: { answers: ["Production"] } } } },
+      {
+        id: 21,
+        result: { answers: { environment: { answers: ["Staging"] } } },
+      },
+      {
+        id: 22,
+        result: { answers: { environment: { answers: ["Production"] } } },
+      },
     ],
   );
+});
+
+test("request clearance aborts active capture without waiting for an answer", async () => {
+  let signal: AbortSignal | undefined;
+  const voice: InterventionChannel = {
+    ask: async (_prompt, _timeout, active) => {
+      signal = active;
+      return new Promise(() => {});
+    },
+  };
+  const { coordinator, responder } = makeCoordinator(
+    voice,
+    new StaticChannel([]),
+  );
+  const handling = coordinator.handleServerRequest(userInputRequest(40));
+  await new Promise((resolve) => setImmediate(resolve));
+  await coordinator.handleNotification({
+    method: "serverRequest/resolved",
+    params: { threadId: "thread-a", requestId: 40 },
+  });
+  await handling;
+  assert.equal(signal?.aborted, true);
+  assert.equal(responder.responses.length, 0);
+});
+
+test("a cross-thread clearance cannot cancel another task's capture", async () => {
+  const voice = new DeferredChannel();
+  const { coordinator, responder } = makeCoordinator(
+    voice,
+    new StaticChannel([]),
+  );
+  const handling = coordinator.handleServerRequest(userInputRequest(41));
+  await new Promise((resolve) => setImmediate(resolve));
+  await coordinator.handleNotification({
+    method: "serverRequest/resolved",
+    params: { threadId: "other-thread", requestId: 41 },
+  });
+  voice.resolve({ ok: true, channel: "voice", text: "Staging" });
+  await handling;
+  assert.equal(responder.responses.length, 1);
+});
+
+test("user cancellation of MCP elicitation returns cancel and never opens a fallback", async () => {
+  let fallbackCalls = 0;
+  const fallback: InterventionChannel = {
+    ask: async () => {
+      fallbackCalls++;
+      throw new Error("must not be called");
+    },
+  };
+  const { coordinator, responder } = makeCoordinator(
+    new StaticChannel([
+      { ok: false, channel: "voice", text: "", errorCode: "cancelled" },
+    ]),
+    fallback,
+  );
+  await coordinator.handleServerRequest(mcpFormRequest(42));
+  assert.deepEqual(responder.responses, [
+    { id: 42, result: { action: "cancel", content: null, _meta: null } },
+  ]);
+  assert.equal(fallbackCalls, 0);
+});
+
+test("channel exception text is not copied into the audit", async () => {
+  const voice: InterventionChannel = {
+    ask: async () => {
+      throw new Error("PRIVATE TRANSCRIPT");
+    },
+  };
+  const { coordinator, audit } = makeCoordinator(voice, new StaticChannel([]));
+  await coordinator.handleServerRequest(userInputRequest(43));
+  assert.doesNotMatch(JSON.stringify(audit.events), /PRIVATE TRANSCRIPT/);
+});
+
+test("a post-response audit failure cannot send a second response", async () => {
+  const responder = new FakeResponder();
+  const coordinator = new InterventionCoordinator({
+    responder,
+    voice: new StaticChannel([{ ok: true, channel: "voice", text: "Staging" }]),
+    fallback: new StaticChannel([]),
+    audit: {
+      write: async (event) => {
+        if (event.event === "response-sent") throw new Error("disk failure");
+      },
+    },
+  });
+  await assert.rejects(
+    coordinator.handleServerRequest(userInputRequest(44)),
+    /post-response/,
+  );
+  assert.equal(responder.responses.length, 1);
+  assert.equal(responder.errors.length, 0);
 });
