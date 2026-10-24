@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Local Tech Mixer — Voice Handoff Test</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        font:
+          16px/1.5 system-ui,
+          sans-serif;
+        background: #eef2f6;
+        color: #162236;
+        margin: 0;
+        padding: 32px;
+      }
+      main {
+        max-width: 760px;
+        margin: auto;
+        background: white;
+        padding: 32px;
+        border-radius: 16px;
+        border: 1px solid #d8e0ea;
+      }
+      h1 {
+        font-size: 28px;
+        margin: 8px 0;
+      }
+      .badge {
+        color: #175f57;
+        font-weight: 700;
+      }
+      p {
+        color: #536176;
+      }
+      label {
+        display: block;
+        font-weight: 600;
+        margin: 18px 0 6px;
+      }
+      input,
+      select {
+        font: inherit;
+        width: 100%;
+        padding: 11px;
+        border: 1px solid #9cacc0;
+        border-radius: 6px;
+      }
+      input[readonly] {
+        background: #f1f4f8;
+        color: #4a586b;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0 20px;
+      }
+      .boundary {
+        background: #f5f6f8;
+        padding: 16px;
+        margin-top: 24px;
+        border-radius: 8px;
+      }
+      .boundary label {
+        font-weight: 400;
+        margin: 8px 0;
+      }
+      .boundary input {
+        width: auto;
+      }
+      button {
+        font: inherit;
+        padding: 12px 20px;
+        border: 0;
+        border-radius: 7px;
+        background: #244ccf;
+        color: white;
+        margin-top: 20px;
+        cursor: pointer;
+      }
+      button:disabled {
+        background: #b7c1cd;
+        color: #435166;
+        cursor: not-allowed;
+      }
+      #status {
+        margin-top: 20px;
+        padding: 14px;
+        background: #eaf4f1;
+      }
+      @media (max-width: 600px) {
+        body {
+          padding: 12px;
+        }
+        main {
+          padding: 20px;
+        }
+        .grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+    <script src="/fixture.js" defer></script>
+  </head>
+  <body>
+    <main data-run-id="__RUN_ID__">
+      <div class="badge">LOCAL SYNTHETIC FIXTURE · NO REGISTRATION</div>
+      <h1>Tech Mixer: participant details</h1>
+      <p>
+        This local test uses synthetic details and a similar field structure to
+        the inspected event form. It is not a NatWest website. Known profile
+        values are prefilled and read-only. One required preference is
+        intentionally absent.
+      </p>
+      <form id="participant-form">
+        <div class="grid">
+          <div>
+            <label for="full-name">Full name *</label
+            ><input id="full-name" value="Alex Example" readonly required />
+          </div>
+          <div>
+            <label for="email">Email address *</label
+            ><input
+              id="email"
+              type="email"
+              value="alex@example.invalid"
+              readonly
+              required
+            />
+          </div>
+          <div>
+            <label for="location">Current location *</label
+            ><input id="location" value="Bengaluru" readonly required />
+          </div>
+          <div>
+            <label for="company">Company *</label
+            ><input id="company" value="Example Labs" readonly required />
+          </div>
+          <div>
+            <label for="job-title">Job title *</label
+            ><input
+              id="job-title"
+              value="Software Engineer"
+              readonly
+              required
+            />
+          </div>
+        </div>
+        <label for="interest">Primary area of interest *</label>
+        <select id="interest" required>
+          <option value="" selected>Choose an area</option>
+          <option>Technology</option>
+          <option>Digital</option>
+          <option>Data</option>
+          <option>Customer Service</option>
+          <option>Sales</option>
+          <option>Finance</option>
+          <option>Risk</option>
+          <option>Controls and Functions</option>
+          <option>Human Resources</option>
+          <option>Project Management</option>
+          <option>Commercial Banking</option>
+          <option>Wealth</option>
+          <option>Markets</option>
+        </select>
+        <button type="submit" id="review">Review local draft</button>
+      </form>
+      <div id="status" role="status">
+        One required preference is missing. No submission is possible.
+      </div>
+      <div class="boundary">
+        <strong>Outside this test</strong>
+        <label>CV upload <input type="file" disabled /></label>
+        <label
+          ><input type="checkbox" id="consent" disabled /> Privacy and marketing
+          consent — disabled</label
+        >
+        <button type="button" id="sign-up" disabled>Sign Up — disabled</button>
+      </div>
+    </main>
+  </body>
+</html>

@@ -21,6 +21,8 @@ the same pending request after the answer. See [native voice versus this workflo
 and the [speech-output shortlist](docs/TTS_OPTIONS_2026-10-24.md). Those providers
 have been researched; the implemented speaker is still Windows SAPI.
 
+For a non-submitting synthetic browser test, see [the local form handoff fixture](docs/LOCAL_FORM_TEST.md).
+
 Requires Windows, Node.js >=24, an installed Codex desktop app with global Dictation enabled, and the same configured shortcut in the bridge and app. Install development tools and inspect setup:
 
 ```powershell

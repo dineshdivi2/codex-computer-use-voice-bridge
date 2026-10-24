@@ -1,5 +1,22 @@
 # Voice input follow-up — 24 October 2026
 
+## Local synthetic form increment
+
+- Added a loopback-only Tech Mixer fixture with five known synthetic values and
+  one missing preference, retaining all 13 observed interest labels. Upload,
+  consent and Sign Up are disabled; there is no submission endpoint.
+- The fixture helper uses shared capture and keeps the reviewed reply in the
+  tool result only. Ordered fixture events contain request IDs and the canonical
+  synthetic selection, not a raw Dictation transcript.
+- 59 automated tests, host/plugin type checks, formatting, PowerShell parsing and
+  launcher syntax checks passed. Loopback tests require network access; the first
+  restricted attempt failed with EACCES and the unrestricted check passed.
+- Live GPT-6 Luna browser/shared-capture run is next. This does not establish a
+  native GPT-Live or current App Server MCP elicitation end-to-end result.
+- Run instructions and boundaries: docs/LOCAL_FORM_TEST.md.
+
+## Prior evidence and research
+
 - Related chat: “Diagnose laptop microphone.” The separate microphone bridge routes
   Intel channel 2 through VB-CABLE. Windows currently selects CABLE Output; a brief
   in-memory cable-level check confirmed a live signal. No audio was saved.
