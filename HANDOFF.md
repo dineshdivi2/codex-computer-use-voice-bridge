@@ -11,8 +11,19 @@
 - 59 automated tests, host/plugin type checks, formatting, PowerShell parsing and
   launcher syntax checks passed. Loopback tests require network access; the first
   restricted attempt failed with EACCES and the unrestricted check passed.
-- Live GPT-6 Luna browser/shared-capture run is next. This does not establish a
-  native GPT-Live or current App Server MCP elicitation end-to-end result.
+- Live GPT-6 Luna browser/shared-capture run completed: the helper returned an
+  answer, Luna selected Data, and local review was reached without a new chat
+  message or resume. Independent server events confirmed the four-step sequence.
+- The user confirmed speaking using Dictation, but the helper labelled the answer
+  `typed`. Non-programmatic textbox changes currently receive that label even
+  when Dictation inserts text directly. Treat speech provenance as user-confirmed,
+  not independently verified; separate interaction mode, imported history and
+  edits before using source metadata as an input-modality metric.
+- A verification run overlapping live capture failed the mutex acquisition test;
+  the post-capture rerun passed all 59 tests. Do not run mutex checks during capture.
+- This does not establish a native GPT-Live or current App Server MCP elicitation
+  end-to-end result. The local fixture server is stopped; the review tab was left
+  available. No real registration was changed or submitted.
 - Run instructions and boundaries: docs/LOCAL_FORM_TEST.md.
 
 ## Prior evidence and research

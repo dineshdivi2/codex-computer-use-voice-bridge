@@ -40,6 +40,20 @@ shortcut fallback. The restricted environment explanation is a hypothesis.
 
 ## Remaining limits
 
+### Synthetic browser handoff follow-up
+
+The local fixture increment passed 59 tests, host/plugin type checks, formatting,
+and PowerShell parsing. A check overlapping the live response window passed 58
+tests but failed mutex acquisition; the complete rerun after capture passed 59/59.
+
+GPT-6 Luna completed the synthetic browser form with Data after the helper returned
+the reviewed answer, without a new chat message or resume. Independent event-state
+inspection confirmed question, answer, selection and review in order, with consent,
+upload and submission disabled. The user confirmed using Dictation; the helper's
+`typed` source label does not distinguish direct speech insertion from typing or
+edits. Speech provenance therefore remains user-confirmed. See
+[local form evidence](LOCAL_FORM_TEST.md#observed-run--24-october-2026).
+
 No native-voice versus bridge end-to-end comparison, new plugin-cache installation,
 current-build App Server compatibility test, TTS provider installation, cloud TTS
 call, or comparative listening benchmark was performed. The checked-in protocol

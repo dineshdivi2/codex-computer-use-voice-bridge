@@ -20,6 +20,41 @@ App Server MCP elicitation round trip. Request IDs in the fixture correlate its
 own handoff events, not App Server request IDs. Those comparisons remain separate.
 Windows SAPI speaks the question; Gemini TTS is not installed or invoked.
 
+## Observed run — 24 October 2026
+
+GPT-6 Luna opened the fixture, asked for the missing preference through the shared
+capture helper, and continued from its returned answer without a new chat message
+or a manually sent resume. It selected **Data** in the browser and clicked Review
+local draft. The visible page reported: “Local review reached. Primary area of
+interest: Data. Nothing was submitted.”
+
+Independent server inspection confirmed this ordered sequence:
+
+1. `question-opened`
+2. `answer-returned`
+3. `interest-changed` to `Data`
+4. `review-reached` with `Data`
+
+Run ID: `fcc1ad0c-5168-4585-8b91-f379d868a0a9`.
+Question request ID: `db97b3f2-7628-4fbc-af28-7e970e0cf957`.
+Consent remained unchecked; upload and submission remained disabled. The fixture
+server was stopped after saving sanitized state under ignored `outputs/`.
+
+The user confirmed **speaking using Dictation**. The helper nevertheless returned
+`source: typed`. That field is not a reliable physical-input classification:
+`response-window.ps1` marks every non-programmatic text change as typed, including
+direct Dictation insertion or an edit to imported speech. It uses
+`dictation-reviewed` only when its history-import path recognizes a candidate.
+This run establishes browser continuation with a user-confirmed spoken answer,
+but does not independently verify transcript provenance. Do not count it as a
+clean automated speech-capture pass. Separating interaction mode, history-import
+provenance and user edits is a follow-up before using this metadata for metrics.
+
+After capture returned, all 59 automated tests, type checks, formatting and
+PowerShell parsing passed. An earlier verification run overlapped live capture:
+58 tests passed and the mutex test could not acquire the intentionally held lock.
+The successful rerun was performed after the response window closed.
+
 ## Run on Windows with Node 24+
 
 Start the loopback-only fixture:
