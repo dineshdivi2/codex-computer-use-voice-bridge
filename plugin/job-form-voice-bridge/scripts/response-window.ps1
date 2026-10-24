@@ -106,6 +106,19 @@ $form.AcceptButton = $send; $form.CancelButton = $cancel
 function Stop-PromptAudio {
     if ($null -ne $script:voice) { try { [void]$script:voice.Speak('', 2) } catch { } }
 }
+function Set-CaptureStarted([bool]$Manual = $false) {
+    # A failed shortcut injection may have partially succeeded. Keep stop controls
+    # available and preserve the prepared history baseline for manual Dictation.
+    $script:dictationWasStarted = $true; $stopped.Enabled = $true; $stopped.Checked = $false
+    $script:recordingActive = $true; $dictate.Text = 'How to stop'
+    if ($Manual) {
+        $script:state = 'manual'
+        $status.Text = 'Shortcut unavailable. Use your Codex shortcut manually in this answer box. Check its indicator before toggling; stop, then tick the box.'
+    } else {
+        $script:state = 'listening'
+        $status.Text = '1. Speak. 2. Stop with your Dictation shortcut. 3. Check the stopped box. 4. Review the answer, then Send.'
+    }
+}
 function Start-Capture {
     if (-not $script:mutexHeld) { $status.Text = 'Another question is using Dictation. Type here or wait.'; return }
     if (Test-DictationInProgress -HistoryRoot $HistoryRoot) {
@@ -121,10 +134,8 @@ function Start-Capture {
     $script:programmaticEdit = $true; $answer.Clear(); $script:programmaticEdit = $false
     try {
         [System.Windows.Forms.SendKeys]::SendWait($Hotkey)
-        $script:dictationWasStarted = $true; $stopped.Enabled = $true; $stopped.Checked = $false
-        $script:recordingActive = $true; $script:state = 'listening'; $dictate.Text = 'How to stop'
-        $status.Text = '1. Speak. 2. Stop with your Dictation shortcut. 3. Check the stopped box. 4. Review the answer, then Send.'
-    } catch { $script:state = 'typing'; $status.Text = 'Could not start Dictation. Type your answer below.' }
+        Set-CaptureStarted
+    } catch { Set-CaptureStarted -Manual $true }
 }
 $answer.Add_TextChanged({
     $send.Enabled = -not [string]::IsNullOrWhiteSpace($answer.Text)
@@ -194,7 +205,7 @@ $timer.Add_Tick({
         } catch { $script:state = 'ready'; $status.Text = 'Choose Start Dictation, or type an answer.' }
     }
     if ($script:dictationStartedAtMs -gt 0) {
-        if ($AutoStopSeconds -gt 0 -and $script:recordingActive -and
+        if ($AutoStopSeconds -gt 0 -and $script:state -eq 'listening' -and $script:recordingActive -and
             ([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds() - $script:dictationStartedAtMs) -ge ($AutoStopSeconds * 1000)) {
             [System.Windows.Forms.SendKeys]::SendWait($Hotkey); $script:recordingActive = $false
         }
@@ -228,7 +239,8 @@ try {
         }
         if ($VerifyControls) {
             # Exercise the real controls with simulated state, without starting Dictation.
-            $script:dictationWasStarted = $true; $stopped.Enabled = $true; $stopped.Checked = $false
+            Set-CaptureStarted -Manual $true
+            if (-not $stopped.Enabled -or $stopped.Checked -or $script:state -ne 'manual') { throw 'Manual shortcut fallback did not expose stop controls.' }
             $send.PerformClick()
             if ($script:confirmed -or $form.IsDisposed) { throw 'Answer was sent before stop confirmation.' }
             $form.Close()

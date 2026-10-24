@@ -12,6 +12,10 @@ The repository contains an implemented MVP, generated types from the installed C
 
 This upgrade keeps **Codex Dictation** and adds a shared response window, explicit answer review, typed input, cancellation, cross-process capture coordination, and setup diagnostics. See the [upgrade design and acceptance checks](docs/DICTATION_UPGRADE.md).
 
+For the laptop's clean-channel workaround, use **CABLE Output** as the microphone.
+See [Windows input routing and its live checks](docs/AUDIO_INPUT.md); the Dictation
+helper does not select an audio device itself.
+
 Requires Windows, Node.js >=24, an installed Codex desktop app with global Dictation enabled, and the same configured shortcut in the bridge and app. Install development tools and inspect setup:
 
 ```powershell

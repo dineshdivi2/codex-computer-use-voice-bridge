@@ -22,7 +22,7 @@ const library = resolve(
 );
 
 test(
-  "response controls prevent send/close until Dictation stop is acknowledged",
+  "manual shortcut fallback exposes stop controls and prevents send/close until stopped",
   { skip: !windows },
   async () => {
     const response = resolve("scripts/capture-codex-dictation.ps1");

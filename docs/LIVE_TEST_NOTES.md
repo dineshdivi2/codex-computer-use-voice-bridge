@@ -18,4 +18,39 @@ Automated verification after these changes: 54 tests passed, including a synthet
 
 Use `node scripts/live-dictation-smoke.mjs` with Node >=24 from the repo to repeat the controlled availability test. It saves outcome flags and timings under ignored `outputs/`, without answer text or audio. The expected sample is “within two weeks.” Opening this window alone does not start recording.
 
-The subsequent live run completed at `2026-10-16T18:42:57.344Z`: `ok=true`, `confirmed=true`, `source=dictation-reviewed`, and `captureMayBeActive=false` after the user's stopped-state acknowledgement. Elapsed time was 37,573 ms including human interaction. The exact expected-answer check was false; confirmation of the spoken/displayed wording is pending. This proves the capture/review/result path ran, not recognition accuracy or App Server task continuation.
+The subsequent live run completed at `2026-10-16T18:42:57.344Z`: `ok=true`, `confirmed=true`, `source=dictation-reviewed`, and `captureMayBeActive=false` after the user's stopped-state acknowledgement. Elapsed time was 37,573 ms including human interaction. The exact expected-answer check was false. The user subsequently confirmed saying “within two weeks” and reported wrong or missing displayed text. Recognition accuracy failed this check; a successful helper result did not establish a correct answer or App Server task continuation.
+
+## Cable input follow-up — 24 October 2026
+
+The related microphone troubleshooting chat identified a noisy first Intel mic
+channel and a usable second channel. Its separate `mic-channel-bridge` project
+routes channel 2 into VB-CABLE. This is a plausible contributor to the earlier
+recognition failure, not a verified retrospective cause.
+
+On this follow-up, Windows MME enumeration identified CABLE Output as the default
+input. The local bridge log recorded today's route startup. A three-second
+in-memory sample from CABLE Output measured approximately -23.87 dBFS RMS and
+0.513 peak on both channels; no sample audio was saved. This establishes live cable
+signal, not which input Codex actually opened, speech quality, or recognition
+accuracy.
+
+The first follow-up known-phrase test timed out. The user reported that Start
+Dictation displayed “Could not start Dictation,” with the stop checkbox disabled.
+That message identifies failure in the shortcut-send path, not a cable-input
+failure. The restricted launch environment is a hypothesis, not a confirmed cause.
+The fallback now retains the prepared history baseline, enables stop confirmation,
+and instructs the user to operate the shortcut manually. It conservatively treats
+capture as potentially active until acknowledged and disables timed automatic
+stopping for manual fallback. Four Windows regression checks and PowerShell parsing
+passed, including the real dialog's manual fallback and send/close guards; these
+synthetic checks do not activate the microphone.
+
+A second test outside the restricted environment returned `invalid_choice` at
+`2026-10-24T07:42:58.864Z`: a confirmed nonempty answer reached the shared client
+but failed finite-choice validation. It was not returned as success. User feedback
+is still needed to distinguish automatic shortcut behavior, manual fallback,
+recognition quality, and a spoken phrase outside the test's choices.
+
+See [Windows input routing](AUDIO_INPUT.md) for endpoint names and the verification
+boundary. No microphone-driver, supervisor, or default-device configuration was
+changed in this follow-up.
