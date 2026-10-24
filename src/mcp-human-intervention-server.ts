@@ -46,7 +46,12 @@ function respond(id: JsonRpcId, result: Record<string, unknown>): void {
   send({ jsonrpc: "2.0", id, result });
 }
 
-function respondError(id: JsonRpcId, code: number, message: string, data?: unknown): void {
+function respondError(
+  id: JsonRpcId,
+  code: number,
+  message: string,
+  data?: unknown,
+): void {
   send({
     jsonrpc: "2.0",
     id,
@@ -126,22 +131,39 @@ function toolDefinition(): Record<string, unknown> {
   };
 }
 
-function requireString(value: unknown, field: string, maxLength: number): string {
-  if (typeof value !== "string" || value.trim().length === 0 || value.length > maxLength) {
-    throw new Error(`${field} must be a non-empty string of at most ${maxLength} characters`);
+function requireString(
+  value: unknown,
+  field: string,
+  maxLength: number,
+): string {
+  if (
+    typeof value !== "string" ||
+    value.trim().length === 0 ||
+    value.length > maxLength
+  ) {
+    throw new Error(
+      `${field} must be a non-empty string of at most ${maxLength} characters`,
+    );
   }
   return value.trim();
 }
 
 function containsSensitiveRequest(text: string): boolean {
-  return /\b(password|passcode|secret|api[ _-]?key|access[ _-]?token|private[ _-]?key|credit card|debit card|bank account|cvv|one[ -]?time password|otp|aadhaar|passport number|social security|tax identifier|pan number)\b/i.test(text);
+  return /\b(password|passcode|secret|api[ _-]?key|access[ _-]?token|private[ _-]?key|credit card|debit card|bank account|cvv|one[ -]?time password|otp|aadhaar|passport number|social security|tax identifier|pan number)\b/i.test(
+    text,
+  );
 }
 
-function buildElicitation(args: Record<string, unknown>): Record<string, unknown> {
+function buildElicitation(
+  args: Record<string, unknown>,
+): Record<string, unknown> {
   const question = requireString(args.question, "question", 240);
-  const context = typeof args.context === "string" ? args.context.trim().slice(0, 240) : "";
+  const context =
+    typeof args.context === "string" ? args.context.trim().slice(0, 240) : "";
   if (containsSensitiveRequest(`${question} ${context}`)) {
-    throw new Error("Sensitive information is forbidden in the human intervention channel");
+    throw new Error(
+      "Sensitive information is forbidden in the human intervention channel",
+    );
   }
   const responseType = requireString(args.response_type, "response_type", 20);
   const message = context ? `${question} Context: ${context}` : question;
@@ -156,7 +178,12 @@ function buildElicitation(args: Record<string, unknown>): Record<string, unknown
             type: "string",
             title: "Decision",
             enum: ["approve once", "approve for session", "decline", "cancel"],
-            enumNames: ["Approve once", "Approve for session", "Decline", "Cancel"],
+            enumNames: [
+              "Approve once",
+              "Approve for session",
+              "Decline",
+              "Cancel",
+            ],
           },
         },
         required: ["decision"],
@@ -165,13 +192,20 @@ function buildElicitation(args: Record<string, unknown>): Record<string, unknown
   }
 
   if (responseType === "choice") {
-    if (!Array.isArray(args.options) || args.options.length < 2 || args.options.length > 5) {
-      throw new Error("options must contain two to five choices for response_type choice");
+    if (
+      !Array.isArray(args.options) ||
+      args.options.length < 2 ||
+      args.options.length > 5
+    ) {
+      throw new Error(
+        "options must contain two to five choices for response_type choice",
+      );
     }
     const options = args.options.map((value, index) =>
       requireString(value, `options[${index}]`, 60),
     );
-    if (new Set(options).size !== options.length) throw new Error("options must be unique");
+    if (new Set(options).size !== options.length)
+      throw new Error("options must be unique");
     return {
       message,
       requestedSchema: {
@@ -205,9 +239,13 @@ function buildElicitation(args: Record<string, unknown>): Record<string, unknown
   throw new Error("response_type must be approval, choice, or text");
 }
 
-async function callTool(params: Record<string, unknown> | undefined): Promise<Record<string, unknown>> {
-  if (params?.name !== TOOL_NAME) throw new Error(`Unknown tool: ${String(params?.name)}`);
-  if (!clientSupportsElicitation) throw new Error("Codex client did not advertise MCP elicitation support");
+async function callTool(
+  params: Record<string, unknown> | undefined,
+): Promise<Record<string, unknown>> {
+  if (params?.name !== TOOL_NAME)
+    throw new Error(`Unknown tool: ${String(params?.name)}`);
+  if (!clientSupportsElicitation)
+    throw new Error("Codex client did not advertise MCP elicitation support");
   const args = params.arguments;
   if (!args || typeof args !== "object" || Array.isArray(args)) {
     throw new Error("Tool arguments must be an object");
@@ -215,10 +253,14 @@ async function callTool(params: Record<string, unknown> | undefined): Promise<Re
   const elicitation = buildElicitation(args as Record<string, unknown>);
   const result = await serverRequest("elicitation/create", elicitation);
   const action = typeof result.action === "string" ? result.action : "cancel";
-  const content = result.content && typeof result.content === "object" ? result.content : null;
-  const summary = action === "accept"
-    ? `Human response accepted: ${JSON.stringify(content)}`
-    : `Human response ${action}. Do not assume approval or continue the blocked action.`;
+  const content =
+    result.content && typeof result.content === "object"
+      ? result.content
+      : null;
+  const summary =
+    action === "accept"
+      ? `Human response accepted: ${JSON.stringify(content)}`
+      : `Human response ${action}. Do not assume approval or continue the blocked action.`;
   return {
     content: [{ type: "text", text: summary }],
     structuredContent: { action, content },
@@ -229,16 +271,21 @@ async function callTool(params: Record<string, unknown> | undefined): Promise<Re
 async function handleRequest(message: JsonRpcRequest): Promise<void> {
   try {
     if (message.method === "initialize") {
-      const protocolVersion = typeof message.params?.protocolVersion === "string"
-        ? message.params.protocolVersion
-        : "2025-06-18";
-      const clientCapabilities = message.params?.capabilities as Record<string, unknown> | undefined;
+      const protocolVersion =
+        typeof message.params?.protocolVersion === "string"
+          ? message.params.protocolVersion
+          : "2025-06-18";
+      const clientCapabilities = message.params?.capabilities as
+        Record<string, unknown> | undefined;
       clientSupportsElicitation = Boolean(clientCapabilities?.elicitation);
       initialized = true;
       respond(message.id, {
         protocolVersion,
         capabilities: { tools: { listChanged: false } },
-        serverInfo: { name: "codex-human-intervention", version: SERVER_VERSION },
+        serverInfo: {
+          name: "codex-human-intervention",
+          version: SERVER_VERSION,
+        },
         instructions:
           "Use request_human_intervention for a genuine blocker, especially an unknown or ambiguous required field in a job-application form. Ask one short non-secret question, include two to five visible choices when the form provides them, fill only the resolved field, and continue autonomously. Never treat a field answer as authorization to submit an application or take another externally visible action. Treat decline, cancel, timeout, and errors as fail-closed outcomes.",
       });
@@ -293,6 +340,7 @@ lines.on("line", (line) => {
 });
 
 lines.on("close", () => {
-  for (const pending of pendingCalls.values()) pending.reject(new Error("MCP client disconnected"));
+  for (const pending of pendingCalls.values())
+    pending.reject(new Error("MCP client disconnected"));
   pendingCalls.clear();
 });

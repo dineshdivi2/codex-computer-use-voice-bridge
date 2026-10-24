@@ -15,7 +15,8 @@ test("installed generated ServerRequest union contains every MVP intervention so
     new URL("../schemas/typescript/ServerRequest.ts", import.meta.url),
     "utf8",
   );
-  for (const method of expectedMethods) assert.match(source, new RegExp(method.replaceAll("/", "\\/")));
+  for (const method of expectedMethods)
+    assert.match(source, new RegExp(method.replaceAll("/", "\\/")));
 });
 
 test("generated schema confirms turn interrupt is cancellation, not a pause response", async () => {

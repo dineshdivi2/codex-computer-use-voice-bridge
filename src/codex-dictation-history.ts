@@ -6,6 +6,8 @@ import { setTimeout as delay } from "node:timers/promises";
 export type DictationTranscriptSource = "rich-history" | "legacy-history";
 
 export interface DictationTranscript {
+  /** Internal exclusion marker; removed from returned transcripts. */
+  folderKey?: string;
   id: string;
   createdAtMs: number;
   text: string;
@@ -42,14 +44,15 @@ export interface WaitForDictationOptions {
   timeoutMs: number;
   surface?: string;
   signal?: AbortSignal;
+  expectedId?: string;
 }
 
 function isMissing(error: unknown): boolean {
   return Boolean(
     error &&
-      typeof error === "object" &&
-      "code" in error &&
-      (error as { code?: unknown }).code === "ENOENT",
+    typeof error === "object" &&
+    "code" in error &&
+    (error as { code?: unknown }).code === "ENOENT",
   );
 }
 
@@ -69,19 +72,45 @@ export class CodexDictationHistory {
 
   constructor(options: DictationHistoryOptions = {}) {
     const codexHome = join(homedir(), ".codex");
-    this.historyRoot = options.historyRoot ?? join(codexHome, "dictation-history");
+    this.historyRoot =
+      options.historyRoot ?? join(codexHome, "dictation-history");
     this.legacyHistoryFile =
-      options.legacyHistoryFile ?? join(codexHome, "transcription-history.jsonl");
+      options.legacyHistoryFile ??
+      join(codexHome, "transcription-history.jsonl");
     this.#pollIntervalMs = options.pollIntervalMs ?? 250;
-    this.#clockSkewMs = options.clockSkewMs ?? 3_000;
+    this.#clockSkewMs = options.clockSkewMs ?? 0;
   }
 
   async snapshotIds(): Promise<Set<string>> {
     const records = await this.#readRecords();
-    return new Set(records.map((record) => record.id));
+    const ids = new Set(records.map((record) => record.id));
+    try {
+      for (const entry of await readdir(this.historyRoot, {
+        withFileTypes: true,
+      })) {
+        if (!entry.isDirectory()) continue;
+        ids.add(`folder:${entry.name}`);
+        try {
+          const metadata = JSON.parse(
+            await readFile(
+              join(this.historyRoot, entry.name, "metadata.json"),
+              "utf8",
+            ),
+          ) as RichMetadata;
+          if (typeof metadata.id === "string") ids.add(metadata.id);
+        } catch {
+          /* The folder marker still excludes partial/in-progress metadata. */
+        }
+      }
+    } catch (error) {
+      if (!isMissing(error)) throw error;
+    }
+    return ids;
   }
 
-  async waitForTranscript(options: WaitForDictationOptions): Promise<DictationTranscript> {
+  async waitForTranscript(
+    options: WaitForDictationOptions,
+  ): Promise<DictationTranscript> {
     const deadline = Date.now() + options.timeoutMs;
     const earliestCreatedAt = options.startedAtMs - this.#clockSkewMs;
 
@@ -89,7 +118,17 @@ export class CodexDictationHistory {
       options.signal?.throwIfAborted();
       const candidates = (await this.#readRecords())
         .filter((record) => !options.baselineIds.has(record.id))
+        .filter(
+          (record) =>
+            !record.folderKey || !options.baselineIds.has(record.folderKey),
+        )
         .filter((record) => record.createdAtMs >= earliestCreatedAt)
+        .filter((record) => record.createdAtMs <= Date.now())
+        .filter(
+          (record) =>
+            options.expectedId === undefined ||
+            record.id === options.expectedId,
+        )
         .filter(
           (record) =>
             record.source === "legacy-history" ||
@@ -97,8 +136,15 @@ export class CodexDictationHistory {
             record.surface === options.surface,
         )
         .sort((left, right) => left.createdAtMs - right.createdAtMs);
+      if (candidates.length > 1)
+        throw new Error(
+          "Multiple Dictation transcripts require explicit review",
+        );
       const transcript = candidates[0];
-      if (transcript) return transcript;
+      if (transcript) {
+        const { folderKey: _internal, ...result } = transcript;
+        return result;
+      }
 
       const remaining = deadline - Date.now();
       if (remaining <= 0) break;
@@ -107,7 +153,9 @@ export class CodexDictationHistory {
       });
     }
 
-    throw new Error("Timed out waiting for a completed Codex Dictation transcript");
+    throw new Error(
+      "Timed out waiting for a completed Codex Dictation transcript",
+    );
   }
 
   async #readRecords(): Promise<DictationTranscript[]> {
@@ -135,36 +183,51 @@ export class CodexDictationHistory {
         .filter((entry) => entry.isDirectory())
         .map(async (entry): Promise<DictationTranscript | null> => {
           try {
-            const raw = await readFile(join(this.historyRoot, entry.name, "metadata.json"), "utf8");
+            const raw = await readFile(
+              join(this.historyRoot, entry.name, "metadata.json"),
+              "utf8",
+            );
             const metadata = JSON.parse(raw) as RichMetadata;
             const id = typeof metadata.id === "string" ? metadata.id : "";
             const createdAtMs = parseCreatedAt(metadata.createdAtMs);
             const text = cleanText(metadata.text);
-            if (!id || createdAtMs === null || metadata.status !== "completed" || !text) {
+            if (
+              !id ||
+              createdAtMs === null ||
+              metadata.status !== "completed" ||
+              !text
+            ) {
               return null;
             }
             return {
+              folderKey: `folder:${entry.name}`,
               id,
               createdAtMs,
               text,
               source: "rich-history",
-              ...(typeof metadata.surface === "string" ? { surface: metadata.surface } : {}),
-              ...(typeof metadata.durationMs === "number" && Number.isFinite(metadata.durationMs)
+              ...(typeof metadata.surface === "string"
+                ? { surface: metadata.surface }
+                : {}),
+              ...(typeof metadata.durationMs === "number" &&
+              Number.isFinite(metadata.durationMs)
                 ? { durationMs: metadata.durationMs }
                 : {}),
             };
           } catch (error) {
             // Codex updates metadata in place. Ignore missing, locked, or partial JSON and retry.
             if (isMissing(error) || error instanceof SyntaxError) return null;
-            const code = error && typeof error === "object" && "code" in error
-              ? (error as { code?: unknown }).code
-              : undefined;
+            const code =
+              error && typeof error === "object" && "code" in error
+                ? (error as { code?: unknown }).code
+                : undefined;
             if (code === "EBUSY" || code === "EPERM") return null;
             throw error;
           }
         }),
     );
-    return records.filter((record): record is DictationTranscript => record !== null);
+    return records.filter(
+      (record): record is DictationTranscript => record !== null,
+    );
   }
 
   async #readLegacyRecords(): Promise<DictationTranscript[]> {

@@ -30,6 +30,12 @@ export interface CoordinatorOptions {
   policy?: InterventionPolicy;
   sanitizer?: PromptSanitizer;
   interpreter?: ResponseInterpreter;
+  responseTimeoutMs?: number;
+  channelTimeoutMs?: number;
+  onProgress?: (
+    event: "waiting" | "answer-sent" | "cleared" | "failed",
+    requestId: RequestId,
+  ) => void;
 }
 
 export class InterventionCoordinator {
@@ -41,6 +47,10 @@ export class InterventionCoordinator {
   readonly #policy: InterventionPolicy;
   readonly #sanitizer: PromptSanitizer;
   readonly #interpreter: ResponseInterpreter;
+  readonly #captures = new Map<string, AbortController>();
+  readonly #responseTimeoutMs: number;
+  readonly #channelTimeoutMs: number;
+  readonly #onProgress?: CoordinatorOptions["onProgress"];
 
   constructor(options: CoordinatorOptions) {
     this.#responder = options.responder;
@@ -51,6 +61,9 @@ export class InterventionCoordinator {
     this.#policy = options.policy ?? new InterventionPolicy();
     this.#sanitizer = options.sanitizer ?? new PromptSanitizer();
     this.#interpreter = options.interpreter ?? new ResponseInterpreter();
+    this.#responseTimeoutMs = options.responseTimeoutMs ?? 180_000;
+    this.#channelTimeoutMs = options.channelTimeoutMs ?? 120_000;
+    this.#onProgress = options.onProgress;
   }
 
   attach(client: AppServerClient): void {
@@ -60,10 +73,14 @@ export class InterventionCoordinator {
       });
     });
     client.on("notification", (notification) => {
-      void this.handleNotification(notification);
+      void this.handleNotification(notification).catch((error) => {
+        client.emit("interventionError", error);
+      });
     });
     client.on("disconnected", () => {
-      void this.handleDisconnect();
+      void this.handleDisconnect().catch((error) => {
+        client.emit("interventionError", error);
+      });
     });
   }
 
@@ -85,12 +102,35 @@ export class InterventionCoordinator {
 
     const expiresAtMs = this.#expiry(request);
     let pending = this.registry.register(request, expiresAtMs);
-    await this.#audit.write(auditFromPending("registered", pending));
+    const captureKey = `${typeof request.id}:${request.id}`;
+    const cancellation = new AbortController();
+    this.#captures.set(captureKey, cancellation);
+    const remainingMs = Math.max(
+      1,
+      Math.min(this.#responseTimeoutMs, (expiresAtMs ?? Infinity) - Date.now()),
+    );
+    const signal = AbortSignal.any([
+      cancellation.signal,
+      AbortSignal.timeout(remainingMs),
+    ]);
+    let responseAttempted = false;
 
     try {
+      await this.#audit.write(auditFromPending("registered", pending));
+      signal.throwIfAborted();
+      this.registry.assertRespondable(correlationFromRequest(request));
       const policy = this.#policy.evaluate(request);
       pending = this.registry.transition(request.id, "POLICY_EVALUATED");
       const prompt = this.#sanitizer.sanitize(request);
+      prompt.taskTitle =
+        request.method === "item/tool/requestUserInput"
+          ? `Codex - ${request.params.questions[0]?.header ?? "Question"}`
+          : `Codex - ${request.method === "mcpServer/elicitation/request" ? request.params.serverName : "Permission request"}`;
+      if (request.method === "item/tool/requestUserInput") {
+        prompt.choices = request.params.questions[0]?.options?.map(
+          (option) => option.label,
+        );
+      }
       let activePrompt: SanitizedPrompt = prompt;
       pending = this.registry.transition(request.id, "PROMPT_SANITIZED");
 
@@ -98,7 +138,8 @@ export class InterventionCoordinator {
         throw new Error(policy.reason);
       }
 
-      let channel = policy.channel === "terminalOnly" ? this.#fallback : this.#voice;
+      let channel =
+        policy.channel === "terminalOnly" ? this.#fallback : this.#voice;
       if (policy.channel === "terminalOnly") {
         pending = this.registry.transition(request.id, "FALLBACK_REQUIRED");
       }
@@ -106,12 +147,47 @@ export class InterventionCoordinator {
       let voiceAttempts = 0;
       let fallbackUsed = policy.channel === "terminalOnly";
       for (;;) {
+        signal.throwIfAborted();
         pending = this.registry.transition(request.id, "USER_NOTIFIED", {
           channel: fallbackUsed ? "terminal" : "voice",
         });
         pending = this.registry.transition(request.id, "CAPTURING_RESPONSE");
-        const answer = await channel.ask(activePrompt);
+        this.#onProgress?.("waiting", request.id);
+        const answer = await this.#ask(
+          channel,
+          activePrompt,
+          Math.min(this.#channelTimeoutMs, remainingMs),
+          signal,
+        );
         this.registry.assertRespondable(correlationFromRequest(request));
+        signal.throwIfAborted();
+
+        if (answer.errorCode === "cancelled") {
+          if (request.method === "mcpServer/elicitation/request") {
+            responseAttempted = true;
+            this.#responder.respond(request.id, {
+              action: "cancel",
+              content: null,
+              _meta: null,
+            });
+            pending = this.registry.transition(
+              request.id,
+              "VALIDATING_RESPONSE",
+            );
+            pending = this.registry.transition(request.id, "CANCELLED");
+            pending = this.registry.transition(
+              request.id,
+              "RESPONDING_TO_APP_SERVER",
+            );
+            pending = this.registry.transition(
+              request.id,
+              "AWAITING_SERVER_RESOLUTION",
+            );
+            await this.#audit.write(auditFromPending("response-sent", pending));
+            return;
+          }
+          throw new Error("Human cancelled the question");
+        }
 
         if (!answer.ok) {
           if (!fallbackUsed) {
@@ -125,13 +201,18 @@ export class InterventionCoordinator {
             });
             continue;
           }
-          throw new Error(answer.error ?? "Human intervention channel returned no answer");
+          throw new Error(
+            answer.error ?? "Human intervention channel returned no answer",
+          );
         }
 
         pending = this.registry.transition(request.id, "VALIDATING_RESPONSE", {
           channel: answer.channel,
         });
-        const interpretation = this.#interpreter.interpret(request, answer.text);
+        const interpretation = this.#interpreter.interpret(
+          request,
+          answer.text,
+        );
         if (interpretation.kind === "ambiguous") {
           pending = this.registry.transition(request.id, "AMBIGUOUS_RESPONSE");
           await this.#audit.write({
@@ -139,6 +220,8 @@ export class InterventionCoordinator {
             detail: interpretation.reason,
           });
           activePrompt = {
+            taskTitle: prompt.taskTitle,
+            choices: prompt.choices,
             spoken: interpretation.clarification,
             terminal: `${prompt.terminal}\n\n${interpretation.clarification}`,
             sensitivity: prompt.sensitivity,
@@ -158,27 +241,47 @@ export class InterventionCoordinator {
         }
 
         if (interpretation.terminalState) {
-          pending = this.registry.transition(request.id, interpretation.terminalState, {
-            decision: interpretation.decision,
-          });
+          pending = this.registry.transition(
+            request.id,
+            interpretation.terminalState,
+            {
+              decision: interpretation.decision,
+            },
+          );
         }
-        pending = this.registry.transition(request.id, "RESPONDING_TO_APP_SERVER", {
-          decision: interpretation.decision,
-        });
+        pending = this.registry.transition(
+          request.id,
+          "RESPONDING_TO_APP_SERVER",
+          {
+            decision: interpretation.decision,
+          },
+        );
         this.registry.assertRespondable(correlationFromRequest(request));
+        responseAttempted = true;
         this.#responder.respond(request.id, interpretation.response);
-        pending = this.registry.transition(request.id, "AWAITING_SERVER_RESOLUTION");
+        pending = this.registry.transition(
+          request.id,
+          "AWAITING_SERVER_RESOLUTION",
+        );
         await this.#audit.write(auditFromPending("response-sent", pending));
+        this.#onProgress?.("answer-sent", request.id);
         return;
       }
     } catch (error) {
+      if (responseAttempted)
+        throw new Error(
+          "The response was attempted; post-response handling failed",
+        );
       const current = this.registry.get(request.id);
-      if (current && ![
-        "RESOLVED",
-        "EXPIRED",
-        "TURN_COMPLETED_BEFORE_RESPONSE",
-        "APP_SERVER_DISCONNECTED",
-      ].includes(current.state)) {
+      if (
+        current &&
+        ![
+          "RESOLVED",
+          "EXPIRED",
+          "TURN_COMPLETED_BEFORE_RESPONSE",
+          "APP_SERVER_DISCONNECTED",
+        ].includes(current.state)
+      ) {
         pending = this.registry.forceTerminal(request.id, "FAIL_CLOSED");
         this.#responder.respondError(
           request.id,
@@ -187,9 +290,14 @@ export class InterventionCoordinator {
         );
         await this.#audit.write({
           ...auditFromPending("fail-closed", pending),
-          detail: error instanceof Error ? error.message : String(error),
+          detail: signal.aborted
+            ? "Intervention cancelled or timed out"
+            : "Intervention could not be completed",
         });
+        this.#onProgress?.("failed", request.id);
       }
+    } finally {
+      this.#captures.delete(captureKey);
     }
   }
 
@@ -199,7 +307,15 @@ export class InterventionCoordinator {
         notification.params.threadId,
         notification.params.requestId,
       );
-      if (pending) await this.#audit.write(auditFromPending("resolved", pending));
+      if (pending) {
+        this.#captures
+          .get(
+            `${typeof notification.params.requestId}:${notification.params.requestId}`,
+          )
+          ?.abort();
+        await this.#audit.write(auditFromPending("resolved", pending));
+        this.#onProgress?.("cleared", notification.params.requestId);
+      }
       return;
     }
     if (notification.method === "turn/completed") {
@@ -208,21 +324,55 @@ export class InterventionCoordinator {
         notification.params.turn.id,
       );
       for (const pending of expired) {
-        await this.#audit.write(auditFromPending("turn-completed-before-response", pending));
+        this.#captures
+          .get(`${typeof pending.requestId}:${pending.requestId}`)
+          ?.abort();
+        await this.#audit.write(
+          auditFromPending("turn-completed-before-response", pending),
+        );
       }
     }
   }
 
   async handleDisconnect(): Promise<void> {
     for (const pending of this.registry.disconnectAll()) {
-      await this.#audit.write(auditFromPending("app-server-disconnected", pending));
+      this.#captures
+        .get(`${typeof pending.requestId}:${pending.requestId}`)
+        ?.abort();
+      await this.#audit.write(
+        auditFromPending("app-server-disconnected", pending),
+      );
     }
+  }
+
+  async #ask(
+    channel: InterventionChannel,
+    prompt: SanitizedPrompt,
+    timeoutMs: number,
+    signal: AbortSignal,
+  ) {
+    signal.throwIfAborted();
+    // Stop waiting even if an older/custom channel ignores the cancellation signal.
+    return new Promise<Awaited<ReturnType<InterventionChannel["ask"]>>>(
+      (resolve, reject) => {
+        const abort = () => reject(new Error("Intervention cancelled"));
+        signal.addEventListener("abort", abort, { once: true });
+        Promise.resolve()
+          .then(() => {
+            signal.throwIfAborted();
+            return channel.ask(prompt, timeoutMs, signal);
+          })
+          .then(resolve, reject)
+          .finally(() => signal.removeEventListener("abort", abort));
+      },
+    );
   }
 
   #expiry(request: SupportedServerRequest): number | null {
     if (request.method !== "item/tool/requestUserInput") return null;
-    return request.params.autoResolutionMs === null
-      ? null
-      : Date.now() + request.params.autoResolutionMs;
+    const duration = request.params.autoResolutionMs;
+    return typeof duration === "number" && Number.isFinite(duration)
+      ? Date.now() + Math.max(0, duration)
+      : null;
   }
 }

@@ -18,7 +18,13 @@ test("tracks item/started and item/completed within the active turn", () => {
     params: {
       threadId: "thread-a",
       turnId: "turn-a",
-      item: { type: "agentMessage", id: "item-a", text: "", phase: null, memoryCitation: null },
+      item: {
+        type: "agentMessage",
+        id: "item-a",
+        text: "",
+        phase: null,
+        memoryCitation: null,
+      },
       startedAtMs: 1,
     },
   });
@@ -28,7 +34,13 @@ test("tracks item/started and item/completed within the active turn", () => {
     params: {
       threadId: "thread-a",
       turnId: "turn-a",
-      item: { type: "agentMessage", id: "item-a", text: "done", phase: null, memoryCitation: null },
+      item: {
+        type: "agentMessage",
+        id: "item-a",
+        text: "done",
+        phase: null,
+        memoryCitation: null,
+      },
       completedAtMs: 2,
     },
   });

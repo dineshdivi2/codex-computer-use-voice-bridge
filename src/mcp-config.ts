@@ -13,7 +13,8 @@ export function humanInterventionMcpConfig(
   const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
   const nodeBinary = resolve(options.nodeBinary ?? process.execPath);
   const serverScript = resolve(
-    options.serverScript ?? resolve(projectRoot, "src", "mcp-human-intervention-server.ts"),
+    options.serverScript ??
+      resolve(projectRoot, "src", "mcp-human-intervention-server.ts"),
   );
   return {
     mcp_servers: {

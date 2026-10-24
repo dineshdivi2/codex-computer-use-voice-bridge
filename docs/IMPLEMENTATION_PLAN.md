@@ -1,5 +1,7 @@
 # Implementation and Rollout Plan
 
+> Historical MVP design/plan. The 2026-10-16 [Dictation upgrade](DICTATION_UPGRADE.md) supersedes the automatic transcript-return path, capture duplication, and cancellation behavior. Live verification remains dated separately.
+
 ## Phase 0 — protocol and runtime evidence (complete)
 
 - Inspect installed Codex and the existing voice bridge.

@@ -1,5 +1,7 @@
 # Codex Human Intervention Harness — High-Level Design
 
+> Historical MVP design/plan. The 2026-10-16 [Dictation upgrade](DICTATION_UPGRADE.md) supersedes the automatic transcript-return path, capture duplication, and cancellation behavior. Live verification remains dated separately.
+
 Status: implemented MVP and live-verified on Windows, 2026-08-11.
 
 Voice-channel update: Codex Dictation with manual `Alt+N` stop is now the default. The original loopback faster-whisper bridge described below remains available through `--voice-mode local`.

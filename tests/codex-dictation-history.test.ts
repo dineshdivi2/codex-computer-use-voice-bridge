@@ -37,7 +37,11 @@ async function writeRich(
 ): Promise<void> {
   const target = join(root, folder);
   await mkdir(target, { recursive: true });
-  await writeFile(join(target, "metadata.json"), JSON.stringify(metadata), "utf8");
+  await writeFile(
+    join(target, "metadata.json"),
+    JSON.stringify(metadata),
+    "utf8",
+  );
 }
 
 test("waits for a new completed global transcript with non-empty text", async () => {
@@ -122,6 +126,74 @@ test("ignores composer history and can use the global legacy record", async () =
     assert.equal(transcript.id, "legacy-global-id");
     assert.equal(transcript.source, "legacy-history");
     assert.equal(transcript.text, "Yes, I require sponsorship");
+  } finally {
+    await rm(files.root, { recursive: true, force: true });
+  }
+});
+
+test("a pre-existing recording or partial metadata folder cannot become a fresh answer", async () => {
+  const files = await fixture();
+  try {
+    await writeRich(files.rich, "recording", {
+      id: "recording",
+      createdAtMs: Date.now(),
+      status: "recording",
+      surface: "global",
+      text: "",
+    });
+    await mkdir(join(files.rich, "partial"));
+    await writeFile(join(files.rich, "partial", "metadata.json"), "{");
+    const baselineIds = await files.history.snapshotIds();
+    const start = Date.now();
+    await writeRich(files.rich, "recording", {
+      id: "recording",
+      createdAtMs: start,
+      status: "completed",
+      surface: "global",
+      text: "previous recording",
+    });
+    await writeRich(files.rich, "partial", {
+      id: "late-id",
+      createdAtMs: start,
+      status: "completed",
+      surface: "global",
+      text: "previous partial",
+    });
+    await assert.rejects(
+      files.history.waitForTranscript({
+        baselineIds,
+        startedAtMs: start,
+        timeoutMs: 50,
+        surface: "global",
+      }),
+      /Timed out/,
+    );
+  } finally {
+    await rm(files.root, { recursive: true, force: true });
+  }
+});
+
+test("multiple eligible recordings require review rather than earliest-record selection", async () => {
+  const files = await fixture();
+  try {
+    const start = Date.now();
+    for (const id of ["first", "second"])
+      await writeRich(files.rich, id, {
+        id,
+        createdAtMs: start,
+        status: "completed",
+        surface: "global",
+        text: id,
+      });
+    await assert.rejects(
+      files.history.waitForTranscript({
+        baselineIds: new Set(),
+        startedAtMs: start,
+        timeoutMs: 50,
+        surface: "global",
+      }),
+      /Multiple/,
+    );
   } finally {
     await rm(files.root, { recursive: true, force: true });
   }

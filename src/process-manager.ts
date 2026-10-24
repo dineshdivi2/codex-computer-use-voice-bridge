@@ -29,7 +29,9 @@ export function appServerSpawnSpec(
         "-ExecutionPolicy",
         "Bypass",
         "-File",
-        fileURLToPath(new URL("../scripts/start-app-server.ps1", import.meta.url)),
+        fileURLToPath(
+          new URL("../scripts/start-app-server.ps1", import.meta.url),
+        ),
         "-CodexBinary",
         codexBinary,
       ],
@@ -48,13 +50,15 @@ export class CodexProcessManager extends EventEmitter {
   }
 
   get process(): ChildProcessWithoutNullStreams {
-    if (!this.#process) throw new Error("Codex app-server has not been started");
+    if (!this.#process)
+      throw new Error("Codex app-server has not been started");
     return this.#process;
   }
 
   start(): ChildProcessWithoutNullStreams {
     if (this.#process) throw new Error("Codex app-server is already running");
-    const executable = this.#options.codexBinary ?? process.env.CODEX_BIN ?? "codex";
+    const executable =
+      this.#options.codexBinary ?? process.env.CODEX_BIN ?? "codex";
     const spec = appServerSpawnSpec(executable);
     const child = spawn(spec.command, spec.args, {
       cwd: this.#options.cwd,
@@ -76,7 +80,9 @@ export class CodexProcessManager extends EventEmitter {
     const child = this.#process;
     if (!child) return;
     child.stdin.end();
-    const exited = new Promise<void>((resolve) => child.once("exit", () => resolve()));
+    const exited = new Promise<void>((resolve) =>
+      child.once("exit", () => resolve()),
+    );
     const timeout = new Promise<void>((resolve) =>
       setTimeout(() => {
         if (!child.killed) child.kill();
