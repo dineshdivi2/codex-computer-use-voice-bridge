@@ -36,6 +36,47 @@ test("requires explicit confirmation and exact capture-session identity", () => 
 });
 
 const echo = `process.stdin.setEncoding('utf8'); let input=''; process.stdin.on('data', c=>input+=c); process.stdin.on('end',()=>{const r=JSON.parse(input); console.log(JSON.stringify({ok:true,confirmed:true,text:r.prompt,sessionId:r.sessionId,source:'typed'}));});`;
+test("confirmed capture still requires a valid choice without guessing extra wording", () => {
+  const output = (text: string) =>
+    JSON.stringify({
+      ok: true,
+      confirmed: true,
+      sessionId: "own",
+      text,
+      source: "dictation-reviewed",
+    });
+  const choices = ["Immediately", "Within two weeks"];
+  assert.equal(
+    parseCaptureOutput(output("Within two weeks."), "own", choices).text,
+    choices[1],
+  );
+  assert.equal(
+    parseCaptureOutput(output("second"), "own", choices).text,
+    choices[1],
+  );
+  assert.equal(
+    parseCaptureOutput(output("two weeks, within two weeks"), "own", choices)
+      .code,
+    "invalid_choice",
+  );
+});
+
+test("confirmed text cannot be accepted while capture may still be active", () => {
+  const result = parseCaptureOutput(
+    JSON.stringify({
+      ok: true,
+      confirmed: true,
+      sessionId: "own",
+      text: "Within two weeks",
+      captureMayBeActive: true,
+    }),
+    "own",
+  );
+  assert.equal(result.ok, false);
+  assert.equal(result.code, "capture_active");
+  assert.equal(result.captureMayBeActive, true);
+});
+
 test("shared capture transports Unicode through stdin and returns only confirmed content", async () => {
   const capture = createCaptureClient({
     spawnCapture: () =>

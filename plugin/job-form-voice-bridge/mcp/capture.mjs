@@ -65,12 +65,21 @@ export function parseCaptureOutput(stdout, sessionId, choices = []) {
       );
     }
     if (value.captureMayBeActive === true)
-      return failure("capture_active", "Stop Dictation before sending an answer.", {
-        captureMayBeActive: true,
-      });
-    const text = choices.length ? matchChoice(value.text, choices) : value.text.trim();
+      return failure(
+        "capture_active",
+        "Stop Dictation before sending an answer.",
+        {
+          captureMayBeActive: true,
+        },
+      );
+    const text = choices.length
+      ? matchChoice(value.text, choices)
+      : value.text.trim();
     if (!text)
-      return failure("invalid_choice", "The answer must match one of the listed choices.");
+      return failure(
+        "invalid_choice",
+        "The answer must match one of the listed choices.",
+      );
     return {
       ok: true,
       text,
@@ -187,7 +196,11 @@ export function createCaptureClient(options = {}) {
               ),
             );
             child.on("close", () => {
-              const parsed = parseCaptureOutput(output, sessionId, request.options);
+              const parsed = parseCaptureOutput(
+                output,
+                sessionId,
+                request.options,
+              );
               if (activeSignal.aborted)
                 return finish(
                   failure(

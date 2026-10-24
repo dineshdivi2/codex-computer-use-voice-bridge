@@ -47,9 +47,18 @@ synthetic checks do not activate the microphone.
 
 A second test outside the restricted environment returned `invalid_choice` at
 `2026-10-24T07:42:58.864Z`: a confirmed nonempty answer reached the shared client
-but failed finite-choice validation. It was not returned as success. User feedback
-is still needed to distinguish automatic shortcut behavior, manual fallback,
-recognition quality, and a spoken phrase outside the test's choices.
+but failed finite-choice validation. It was not returned as success. The user
+subsequently confirmed that the button started recording, Alt+N stopped it, and
+the displayed text accurately captured the spoken wording, including the extra
+wording around “within two weeks.” This establishes user-observed start/stop and
+accurate transcription for one standalone sample. The strict finite-choice check
+is a separate limitation, not an ASR failure for this run. It does not establish
+the Codex-selected endpoint, general recognition accuracy, or full task continuation.
+
+The different launch environment is consistent with shortcut-injection restrictions
+affecting the first attempt, but this was not a controlled comparison. Full local
+verification was rerun on 24 October: 56 tests passed, both TypeScript checks,
+formatting, and PowerShell parsing passed. No replacement TTS provider was run.
 
 See [Windows input routing](AUDIO_INPUT.md) for endpoint names and the verification
 boundary. No microphone-driver, supervisor, or default-device configuration was

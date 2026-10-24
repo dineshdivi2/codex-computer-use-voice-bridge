@@ -1,8 +1,10 @@
 # Codex Computer-Use Voice Bridge: concept and verified status
 
-Last reviewed: 2026-10-16.
+Last reviewed: 2026-10-24.
 
-A Dictation-preserving upgrade is implemented in this checkout: shared capture/UI, explicit review/send, cancellation, typed fallback, diagnostics, and additional regression tests. See [the upgrade design](docs/DICTATION_UPGRADE.md). Current-build live microphone capture and a newly installed plugin are not yet verified; the historical live evidence below remains dated.
+A Dictation-preserving upgrade is implemented in this checkout: shared capture/UI, explicit review/send, cancellation, typed fallback, diagnostics, and additional regression tests. See [the upgrade design](docs/DICTATION_UPGRADE.md). On 24 October the user confirmed that the standalone dialog started Dictation on click, stopped with Alt+N, and transcribed their spoken wording correctly. Finite-choice validation rejected extra wording; this was not evidence of failed recognition. The current installed plugin and complete ask/answer/resume workflow remain unverified. See [live notes](docs/LIVE_TEST_NOTES.md).
+
+The target is reliable handling of missing-information blockers: ask aloud, receive a reviewed value, and resume the originating task. Native Codex voice already supports clarification and bringing blockers into an active voice conversation; dependable completion of this exact form-filling loop still needs comparison. See [the documented comparison and acceptance test](docs/NATIVE_VOICE_COMPARISON.md). Windows SAPI remains the implemented speaker; [alternative TTS providers](docs/TTS_OPTIONS_2026-10-24.md) are research only.
 
 ## Concept
 

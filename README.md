@@ -16,6 +16,11 @@ For the laptop's clean-channel workaround, use **CABLE Output** as the microphon
 See [Windows input routing and its live checks](docs/AUDIO_INPUT.md); the Dictation
 helper does not select an audio device itself.
 
+The intended outcome is to ask aloud when a task lacks a required value and resume
+the same pending request after the answer. See [native voice versus this workflow](docs/NATIVE_VOICE_COMPARISON.md)
+and the [speech-output shortlist](docs/TTS_OPTIONS_2026-10-24.md). Those providers
+have been researched; the implemented speaker is still Windows SAPI.
+
 Requires Windows, Node.js >=24, an installed Codex desktop app with global Dictation enabled, and the same configured shortcut in the bridge and app. Install development tools and inspect setup:
 
 ```powershell
