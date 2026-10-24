@@ -71,5 +71,30 @@ bridge. Include a second missing field, a corrected answer, no speech, cancellat
 and two concurrent tasks. Report these cases separately. Never treat a model's
 favorable summary, helper success, or request clearance as end-to-end success.
 
-Current evidence: user-confirmed microphone start/stop and accurate transcription
-for one standalone sample. The current-build end-to-end comparison remains unrun.
+## Observed active-session result — 24 October 2026
+
+The user started native voice in this existing chat. A fresh synthetic fixture in
+native mode began with the required preference blank. Browser inspection identified
+the missing value; the backend returned a focused question, which the native voice
+conversation spoke. The user's spoken Data preference returned to the same task,
+and the browser selected Data without a new instruction to resume. The preceding
+bridge run's choice was not used as authorization for this run.
+
+The user then asked to conclude the test and ended voice. The backend completed
+the local Review action after voice ended and verified the visible success message.
+Independent server state confirmed Data selected, review reached, and consent,
+upload and submission disabled. The local server was stopped. No real registration
+was changed. The native run used neither SAPI nor the shared Dictation helper.
+
+This is evidence that **native voice can deliver a missing-field question and
+return a spoken answer that continues browser work in an active session**. For
+this simple case, the bridge is not required to avoid a manual resume prompt.
+Review completion after voice ended is reported separately from the selection
+that occurred during voice. Fixture events prove browser actions, while the
+voice conversation establishes the question and answer exchange.
+
+The current chat's task model was not independently verified, so this is not a
+controlled GPT-6 Luna versus GPT-6 Luna comparison or a model performance ranking.
+Automatic voice startup with no active session, additional missing fields,
+corrections, cancellation, no speech and concurrent tasks remain untested. The
+project's current App Server MCP path also remains unverified.

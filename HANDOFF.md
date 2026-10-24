@@ -5,14 +5,18 @@
 - Added `--native` fixture mode with the same blank preference and external-action
   boundaries. It records browser selection/review without requiring or fabricating
   shared-capture events. Default bridge mode keeps its existing answer guards.
-- All 60 tests, host/plugin type checks and formatting passed. The native live run
-  has not started. The user reports Dictation is available during a running turn
-  and will try starting voice chat once the turn finishes.
-- Next: user starts native voice in this chat; then launch a fresh `--native`
-  fixture, inspect it through browser tools, ask the genuinely unknown preference
-  through native voice, and verify continuation. Do not reuse Data from the prior
-  synthetic run or invoke the bridge helper. If native voice is unavailable, record
-  that blocker rather than counting Dictation as a native voice test.
+- All 60 tests, host/plugin type checks and formatting passed.
+- Native active-session run completed: the question was spoken, the user's spoken
+  Data answer returned to this task, and the browser selected Data without resume.
+  The user then concluded voice; local review was completed and verified after
+  voice ended. No shared capture helper was used. Independent fixture state
+  confirmed Data/review and all external-action boundaries remained disabled.
+- Sanitized state is in ignored outputs/native-form-2026-10-24.json; the local
+  server is stopped. Native voice works for this simple active-session case, so
+  the bridge is not necessary for that case. Do not claim automatic voice startup
+  or a controlled Luna comparison: the current chat model was not verified.
+- Next evaluation cases: no active session, corrections, a second missing field,
+  no speech/cancellation, concurrent tasks and the project's App Server path.
 
 ## Local synthetic form increment
 

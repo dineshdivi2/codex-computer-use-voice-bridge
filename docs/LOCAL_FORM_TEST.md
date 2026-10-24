@@ -112,6 +112,13 @@ Record those observations separately using the actual conversation and user
 confirmation. A voice session started by the user tests the active-session case;
 it does not establish automatic voice startup when a task becomes blocked.
 
+The first native run completed on 24 October: a spoken question and spoken Data
+answer were followed by browser selection without resume. The user ended voice
+after selection; local review was then completed and independently verified.
+State reported `mode: native`, Data/review, and all external actions disabled.
+See [native comparison findings](NATIVE_VOICE_COMPARISON.md#observed-active-session-result--24-october-2026)
+for the evidence limits, including the unverified current-chat model.
+
 `GET /api/state` reports this fixture's run ID, canonical selected interest, review
 checkpoint and ordered events. A successful run should show `question-opened`,
 `answer-returned`, `interest-changed`, then `review-reached`, with matching question

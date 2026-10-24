@@ -54,7 +54,15 @@ upload and submission disabled. The user confirmed using Dictation; the helper's
 edits. Speech provenance therefore remains user-confirmed. See
 [local form evidence](LOCAL_FORM_TEST.md#observed-run--24-october-2026).
 
-No native-voice versus bridge end-to-end comparison, new plugin-cache installation,
+The subsequent native observation mode passed 60 tests, type checks and formatting.
+In an active native voice session, the task asked about the missing field and
+selected Data after the spoken reply without a manual resume. Local review was
+completed after the user ended voice. Server state independently confirmed the
+selection, review and external-action boundaries. The current chat model was not
+verified, so this is not a controlled same-model comparison. See the
+[native findings](NATIVE_VOICE_COMPARISON.md#observed-active-session-result--24-october-2026).
+
+No inactive-session native voice test, new plugin-cache installation,
 current-build App Server compatibility test, TTS provider installation, cloud TTS
 call, or comparative listening benchmark was performed. The checked-in protocol
 snapshot has not been regenerated in this update. Historical audit evidence retains
