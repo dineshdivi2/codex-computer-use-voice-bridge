@@ -85,6 +85,33 @@ use shell/HTTP calls to change the form's values as a substitute for browser wor
 
 ## Evidence and boundaries
 
+### Native voice comparison mode
+
+Start a fresh, separate fixture with:
+
+```powershell
+node --experimental-strip-types src/form-fixture.ts --native
+```
+
+This uses the same form, blank preference and disabled external actions. State
+explicitly reports `mode: native`. Native mode permits selection and local review
+without our bridge's capture events and rejects bridge `question-opened` events.
+The default bridge mode retains its correlated-answer requirement.
+
+Start native **voice chat**, rather than Dictation, in the existing Codex chat.
+Ask the task to complete the synthetic draft from known context, leaving its
+preference genuinely unknown. Do not invoke our helper or supply the previous
+run's choice. Observe whether the question is spoken without another prompt,
+the answer reaches this task, and browser work continues without a manual resume.
+If choosing a specific task model for comparison, verify it in the app; a prior
+subagent's model does not establish the model used by the current chat.
+
+Native fixture events establish only browser selection and review. They do not
+prove a question was spoken, a microphone was active, or an answer was received.
+Record those observations separately using the actual conversation and user
+confirmation. A voice session started by the user tests the active-session case;
+it does not establish automatic voice startup when a task becomes blocked.
+
 `GET /api/state` reports this fixture's run ID, canonical selected interest, review
 checkpoint and ordered events. A successful run should show `question-opened`,
 `answer-returned`, `interest-changed`, then `review-reached`, with matching question

@@ -31,7 +31,10 @@ interface FixtureEvent {
 }
 
 /** Loopback-only synthetic fixture; it has no registration/submission endpoint. */
-export async function startFormFixture(port = 0) {
+export async function startFormFixture(
+  port = 0,
+  mode: "bridge" | "native" = "bridge",
+) {
   const runId = randomUUID();
   const events: FixtureEvent[] = [];
   const requests = new Map<string, "waiting" | "answered" | "cancelled">();
@@ -64,6 +67,7 @@ export async function startFormFixture(port = 0) {
       if (req.method === "GET" && req.url === "/api/state") {
         return json(200, {
           kind: "synthetic-tech-mixer",
+          mode,
           runId,
           interest,
           reviewed,
@@ -115,6 +119,10 @@ export async function startFormFixture(port = 0) {
         ) {
           return json(409, { error: "Invalid or duplicate question" });
         }
+        if (mode !== "bridge")
+          return json(409, {
+            error: "Native observation does not use bridge events",
+          });
         requests.set(event.requestId, "waiting");
         add({ type: "question-opened", requestId: event.requestId });
       } else if (
@@ -151,13 +159,16 @@ export async function startFormFixture(port = 0) {
           (event.value !== "" && !interests.includes(event.value))
         )
           return json(422, { error: "Unknown choice" });
-        if (![...requests.values()].includes("answered"))
+        if (mode === "bridge" && ![...requests.values()].includes("answered"))
           return json(409, { error: "Wait for the reviewed human answer" });
         interest = event.value;
         reviewed = false;
         add({ type: "interest-changed", value: interest });
       } else if (event.type === "review-reached") {
-        if (!interest || ![...requests.values()].includes("answered"))
+        if (
+          !interest ||
+          (mode === "bridge" && ![...requests.values()].includes("answered"))
+        )
           return json(409, { error: "Resolve the missing value first" });
         reviewed = true;
         add({ type: "review-reached", value: interest });
@@ -189,11 +200,16 @@ if (
   process.argv[1] &&
   resolve(process.argv[1]) === fileURLToPath(import.meta.url)
 ) {
-  const fixture = await startFormFixture();
+  const args = process.argv.slice(2);
+  if (args.length > 1 || (args.length === 1 && args[0] !== "--native"))
+    throw new Error("Usage: node src/form-fixture.ts [--native]");
+  const mode = args[0] === "--native" ? "native" : "bridge";
+  const fixture = await startFormFixture(0, mode);
   console.log(
     JSON.stringify({
       url: fixture.url,
       runId: fixture.runId,
+      mode,
       pid: process.pid,
     }),
   );

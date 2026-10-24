@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { startFormFixture } from "../src/form-fixture.ts";
 
-async function setup() {
-  const fixture = await startFormFixture();
+async function setup(mode: "bridge" | "native" = "bridge") {
+  const fixture = await startFormFixture(0, mode);
   const event = async (
     value: Record<string, unknown>,
     origin = fixture.url,
@@ -53,6 +53,44 @@ test("synthetic form starts without a preference and rejects unrelated origins a
       404,
     );
     assert.equal((await fixture.state()).events.length, 0);
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("native observation records browser review without fabricating bridge capture evidence", async () => {
+  const fixture = await setup("native");
+  try {
+    const initial = await fixture.state();
+    assert.equal(initial.mode, "native");
+    assert.equal(initial.interest, "");
+    assert.equal(await fixture.event({ type: "review-reached" }), 409);
+    assert.equal(
+      await fixture.event({ type: "question-opened", requestId: "q1" }),
+      409,
+    );
+    assert.equal(
+      await fixture.event({ type: "interest-changed", value: "invented" }),
+      422,
+    );
+    assert.equal(
+      await fixture.event({ type: "interest-changed", value: "Wealth" }),
+      200,
+    );
+    assert.equal(await fixture.event({ type: "review-reached" }), 200);
+    const state = await fixture.state();
+    assert.equal(state.reviewed, true);
+    assert.deepEqual(
+      state.events.map((e: { type: string }) => e.type),
+      ["interest-changed", "review-reached"],
+    );
+    assert.equal(state.consentChecked, false);
+    assert.equal(state.uploadEnabled, false);
+    assert.equal(state.submissionEnabled, false);
+    assert.equal(
+      (await fetch(`${fixture.url}/submit`, { method: "POST" })).status,
+      404,
+    );
   } finally {
     await fixture.close();
   }

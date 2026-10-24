@@ -1,5 +1,19 @@
 # Voice input follow-up — 24 October 2026
 
+## Native comparison preparation
+
+- Added `--native` fixture mode with the same blank preference and external-action
+  boundaries. It records browser selection/review without requiring or fabricating
+  shared-capture events. Default bridge mode keeps its existing answer guards.
+- All 60 tests, host/plugin type checks and formatting passed. The native live run
+  has not started. The user reports Dictation is available during a running turn
+  and will try starting voice chat once the turn finishes.
+- Next: user starts native voice in this chat; then launch a fresh `--native`
+  fixture, inspect it through browser tools, ask the genuinely unknown preference
+  through native voice, and verify continuation. Do not reuse Data from the prior
+  synthetic run or invoke the bridge helper. If native voice is unavailable, record
+  that blocker rather than counting Dictation as a native voice test.
+
 ## Local synthetic form increment
 
 - Added a loopback-only Tech Mixer fixture with five known synthetic values and
